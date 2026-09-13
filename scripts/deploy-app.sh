@@ -18,7 +18,7 @@ node scripts/fetch-pnl-snapshot.mjs
 echo "== [2/6] build"
 cd "$APP_DIR"
 bun run build:worker >/dev/null
-./node_modules/.bin/tsc --noEmit
+./node_modules/.bin/tsc --noEmit || { echo "FAIL: typecheck errors, not deploying"; exit 1; }
 # secrets never enter the browser bundle: the server routes hold them. The only
 # key the page carries is the demo buyer (testnet play money), taken from the
 # root .env (DEMO_BUYER_PK / DEMO_BUYER_ADDRESS) so app/.env.local is never the
