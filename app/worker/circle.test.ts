@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, it, test } from "bun:test";
 import { circleEnvFrom, entitySecretCiphertext, parseCircleBudgetRequest, parseCircleJobRequest, parseCircleSubmitRequest } from "./circle";
 
 describe("circle env", () => {

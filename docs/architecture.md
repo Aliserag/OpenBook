@@ -1,77 +1,50 @@
 # OpenBook Architecture
 
-OpenBook is an autonomous agent that sells freshness-guaranteed onchain data.
-Buyers discover the service through ENSv2 records (Sepolia), pay per query
-through a time-boxed escrow (ERC-8183 on Arc), and are refunded automatically
-whenever a paid-for delivery misses its SLA. The seller is a reusable MCP
-server over The Graph Gateway with `_meta` freshness gates; the agent's
-treasury is a policy wallet that emits onchain `PolicyBlocked` events; every
-payment event is indexed by a Studio subgraph on arc-testnet, forming the
-agent's public P&L.
+OpenBook is the data marketplace for AI agents, with a freshness guarantee that enforces
+itself. Sellers are ENSv2 names whose text records set a price and a freshness window.
+A buyer pays USDC into an ERC-8183 escrow on Arc with that promise written into the job.
+The delivery comes from The Graph gateway stamped with the block it was indexed at, and
+the SlaHook compares that block with the promise before any payout: fresh, the seller is
+paid and the protocol takes 2%; stale, `complete()` reverts and the escrow refunds the
+buyer. Every settlement, refund and fee is indexed by the open-book subgraph into public
+books.
+
+![OpenBook architecture](images/architecture.png)
 
 ```mermaid
 flowchart LR
-    subgraph BuyerSide["Buyer (agent CLI / human)"]
-        BC[agent/buyer-cli.ts<br/>quote → pay → deliver → verify → settle/refund]
-        FE[Frontend app · openbook.litai.ca<br/>one page: the latest refund · keyless buy / make-it-fail<br/>market · public books · console<br/>signs nothing: no key in the bundle]
-        CW["Circle Wallets (developer-controlled, SCA) on Arc<br/>buyer: createJob · approve · fund<br/>seller: setBudget · submit<br/>gas: Circle Gas Station · driven by /api/circle/*"]
-        FE -->|"buy / submit"| CW
-        TR["Treasury ops (scripts/circle)<br/>App Kit Bridge, CCTP v2 + Forwarding Service<br/>Gateway Unified Balance deposit → spend on Arc<br/>fund the buyer wallet from another chain"]
-        TR -.->|"USDC"| CW
+    B["Buyer<br/>agent via MCP · console in plain English<br/>own wallet or a Circle wallet"]
+
+    subgraph ENS["ENSv2 · Sepolia"]
+        N["Seller = ENS name<br/>svc.price · svc.sla · svc.payee<br/>subnames with their own terms<br/>delegated repricing (EAC)"]
     end
 
-    subgraph ENSv2["ENSv2 · Sepolia (hard-fail gateway)"]
-        NAME[openbook.eth]
-        RECS["svc.menu · svc.price · svc.sla<br/>svc.payee · svc.operator · svc.pnl · svc.attester<br/>agent-context · agent-endpoint[mcp/web]<br/>agent-registration[ERC-8004]<br/>subnames: alpha (own key, delegated svc.price) · aave-v3-arbitrum-lending"]
-        NAME --> RECS
+    subgraph SRV["OpenBook server"]
+        D["/api/deliver<br/>query the Gateway, append _meta<br/>hash the payload, sign hash + block"]
+        A["/api/attest<br/>post attestation, dry-run complete()<br/>send complete() or reject()"]
     end
 
-    subgraph Arc["Arc Testnet (5042002)"]
-        J["ERC-8183 AgenticCommerce escrow<br/>createJob(packSla) → setBudget → approve → fund<br/>→ submit(payloadHash) → complete/reject → claimRefund"]
-        HOOK["SlaHook.sol, ours (EIP-8183 IACPHook)<br/>beforeAction(complete) verifies the attestation<br/>covers the payloadHash ∧ metaBlock ≥ minBlock<br/>else revert SlaNotMet(metaBlock, minBlock)"]
-        W["PolicyWallet treasury<br/>perTxCap · dailyCap · allowlist · block-day buckets<br/>WithdrawalExecuted / PolicyBlocked"]
-        ID["ERC-8004 IdentityRegistry<br/>agent identity"]
-        USDC[(USDC · 6-dec ERC-20 view)]
+    subgraph ARC["Arc · USDC"]
+        E["ERC-8183 escrow<br/>createJob → fund → submit<br/>complete / reject"]
+        H["SlaHook<br/>metaBlock ≥ floor → pay 98% / 2%<br/>else revert SlaNotMet → refund"]
+        T["PolicyWallet treasury<br/>2% fee · onchain caps"]
     end
 
-    subgraph MCP["sla-subgraph-mcp (server)"]
-        S["7 tools<br/>list_datasets · discover_datasets · get_quote · choose_seller · query_dataset<br/>verify_delivery · get_pnl"]
-        GATE["_meta freshness gate<br/>chainHeadBlock − _meta.block > maxAge<br/>→ STALE · never charged"]
-        SIGN["attestation<br/>queryId|payloadHash|metaBlock"]
+    subgraph GRAPH["The Graph"]
+        G["Gateway<br/>any subgraph, block-stamped"]
+        K["open-book subgraph<br/>public books: settlements, refunds, fees"]
     end
 
-    subgraph Graph["The Graph"]
-        GW[Gateway<br/>pinned subgraphs, one config entry each<br/>Aave V3 Arb · Uniswap V3 Arb · OpenSea · ENS · Overtime]
-        PNL[open-book subgraph · v0.0.8<br/>arc-testnet · Studio, read through the page's cached /api/subgraph proxy<br/>QueryPaid · Fulfilled · Settled · RefundIssued · CostPaid · PolicyBlocked · Provider]
-    end
-
-    SP[scripts/stale-proxy.ts<br/>replays cached old _meta<br/>deterministic money shot]
-    API["page server routes (app/worker)<br/>/api/subgraph cache · /api/deliver: Gateway key, signs the observed block (EIP-191)<br/>/api/circle/job · /api/circle/submit: Circle wallets, entity secret ciphertext per request<br/>/api/attest: the hook attester, verifies the job onchain, then settles as the job's evaluator (complete or reject)"]
-    FE -->|"query · attest"| API
-    API --> GW
-    API -->|"attest(jobId, hash, metaBlock, minBlock)"| HOOK
-
-    BC -->|"resolve records (hard-fail if null)"| NAME
-    FE -->|"resolve records (hard-fail if null)"| NAME
-    BC -->|"get_quote · query_dataset"| S
-    FE -->|"quote + delivery"| S
-    S -->|"append _meta + gate"| GW
-    BC -->|"--stale"| SP
-    SP -->|"replays old _meta"| GW
-    BC -->|"pay (escrowed SLA)"| J
-    S -->|"query_dataset (seller side)"| GW
-    SEL[agent/seller.ts<br/>watch → query → submit → log revenue] --> J
-    BC -->|"verify_delivery → complete / reject+refund"| J
-    J -->|"complete() consults the hook first"| HOOK
-    HOOK -.->|"SlaNotMet → complete() reverts, refund is the only path"| J
-    J --> USDC
-    J -->|"PaymentReleased / Refunded / Job*"| PNL
-    W --> USDC
-    W -->|"WithdrawalExecuted / PolicyBlocked"| PNL
-    S -->|"get_pnl"| PNL
-    FE --> PNL
-    ID -.->|"agent-registration record"| NAME
-    S -.->|"attestation (operator key)"| BC
+    B -->|"1 · read price + freshness promise"| N
+    B -->|"2 · fund job with the promise written in"| E
+    B -->|"3 · request delivery"| D
+    D -->|"query"| G
+    D -->|"4 · signed, block-stamped delivery"| B
+    A -->|"5 · attest + settle"| E
+    E -->|"complete() consults"| H
+    H -->|"fee"| T
+    E -->|"6 · events"| K
+    K -->|"books"| B
 ```
 
 ## Reference flow (happy path)
