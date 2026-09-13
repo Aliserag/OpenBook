@@ -20,10 +20,10 @@
  * the T9 sandbox re-exports it from here — act's own failure paths need it,
  * so it lives with them).
  */
-import { BaseError, keccak256, toBytes, type Address, type WalletClient } from "viem";
+import { BaseError, keccak256, parseAbi, toBytes, type Address, type PublicClient, type WalletClient } from "viem";
 import { CONFIG, defaultQueryFor, type DatasetConfig } from "../../config";
 import { env } from "../../env";
-import { attestViaApi, deliverViaApi, hasGatewayAccess } from "../../data/api";
+import { attestViaApi, circleCreateJob, circleSetBudget, circleStatus, circleSubmit, deliverViaApi, hasGatewayAccess } from "../../data/api";
 import { readHookAttester } from "../../data/hook";
 import { ADDR } from "../../data/addresses";
 import { getProvider, arcWalletClient, ensureArcChain } from "../../arc";
@@ -39,13 +39,16 @@ import {
 } from "../../../../mcp/src/ens";
 import { defaultChainHeadResolver } from "../../../../mcp/src/chainhead";
 import {
+  ERC8183_ABI,
   createJobWithSla,
+  escrowAddress,
   getJob,
+  packSla,
   submitDeliverable,
   type Sla,
 } from "../../../../agent/escrow";
 import { verifyDelivery, type VerifyDeliveryResult } from "../../../../mcp/src/escrow";
-import { register, type Command, type CommandResult, type KvRow } from "../registry";
+import { register, type Command, type CommandContext, type CommandResult, type KvRow } from "../registry";
 import type { SignerKind } from "../../data/types";
 
 function reason(error: unknown): string {
@@ -88,6 +91,84 @@ export interface BuyArgs {
   datasetId: string;
   /** 6-dec raw USDC units · exactly what `quote <id>` shows */
   amountUsdc: number;
+  /** the buyer's freshness demand as a block window on the dataset's chain (overrides the seller's window) */
+  lagBlocks?: number;
+  /** seconds the buyer asked for, kept for the receipt */
+  freshSeconds?: number;
+  /** 6-dec cap the buyer set with --max; the quote was checked against it */
+  maxUsdc?: number;
+  /** a name filter on the data (a pool name, a team): the query narrows to it */
+  match?: string;
+}
+
+/** Public RPCs the browser may read a chain head from (CORS-open); the block time is used for freshness math. */
+const CHAIN_RPC: Record<"arbitrum" | "ethereum", string> = { arbitrum: "https://arb1.arbitrum.io/rpc", ethereum: "https://ethereum-rpc.publicnode.com" };
+
+/** The chain head as the buyer's clock sees it: number and how many seconds old its timestamp already is. */
+export async function chainHeadWithAge(chain: "arbitrum" | "ethereum"): Promise<{ number: number; ageSeconds: number }> {
+  const res = await fetch(CHAIN_RPC[chain], { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getBlockByNumber", params: ["latest", false] }) });
+  const body = (await res.json()) as { result?: { number: string; timestamp: string } };
+  if (!body.result) throw new Error(`no head from the ${chain} rpc`);
+  return { number: parseInt(body.result.number, 16), ageSeconds: Math.max(0, Date.now() / 1000 - parseInt(body.result.timestamp, 16)) };
+}
+
+/**
+ * The floor for a freshness window measured in wall-clock time: the first
+ * block that is at most `windowSeconds` old. When the newest block is already
+ * older than the window the floor lands past the head, and no delivery can
+ * clear it: the demand is impossible for any seller on that chain.
+ */
+export function floorForWindow(head: { number: number; ageSeconds: number }, windowSeconds: number, chain: "arbitrum" | "ethereum"): number {
+  const blocksBack = Math.floor((windowSeconds - head.ageSeconds) / SECONDS_PER_BLOCK[chain]);
+  return head.number - blocksBack;
+}
+
+/** The query for a purchase: the dataset's default, narrowed to a name when the buyer named one. */
+export function queryFor(dataset: DatasetConfig, match?: string): string {
+  const m = match === undefined ? undefined : match.replace(/["\\]/g, "").trim();
+  const where = (extra: string) => (m ? `where: {${extra}${extra ? ", " : ""}name_contains_nocase: "${m}"}` : extra ? `where: {${extra}}` : "");
+  switch (dataset.schema) {
+    case "dex-amm/4.0.1":
+      return `{ liquidityPools(first: 3, orderBy: totalValueLockedUSD, orderDirection: desc${m ? `, ${where("")}` : ""}) { name totalValueLockedUSD inputTokens { symbol lastPriceUSD } } }`;
+    case "lending/3.1.0":
+      return `{ markets(first: 3, orderBy: totalValueLockedUSD, orderDirection: desc${m ? `, ${where("")}` : ""}) { id name totalValueLockedUSD } }`;
+    case "sports-odds/1.0.0":
+      return `{ sportMarkets(first: 3, orderBy: timestamp, orderDirection: desc, where: {isOpen: true${m ? `, homeTeam_contains_nocase: "${m}"` : ""}}) { homeTeam awayTeam homeOdds awayOdds } }`;
+    default:
+      return defaultQueryFor(dataset);
+  }
+}
+
+/** One line per delivered row, readable on a receipt: the thing the buyer paid for. */
+export function summarizeData(schema: string, data: unknown): string[] {
+  const root = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
+  const usd = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? `$${n.toLocaleString("en-US", { maximumFractionDigits: n >= 100 ? 0 : 2 })}` : "?"; };
+  if (schema === "dex-amm/4.0.1" && Array.isArray(root["liquidityPools"])) {
+    return (root["liquidityPools"] as Array<Record<string, unknown>>).map((p) => {
+      const toks = (Array.isArray(p["inputTokens"]) ? (p["inputTokens"] as Array<Record<string, unknown>>) : []).map((t) => `${String(t["symbol"])} ${usd(t["lastPriceUSD"])}`).join(" · ");
+      return `${String(p["name"])} · TVL ${usd(p["totalValueLockedUSD"])} · ${toks}`;
+    });
+  }
+  if (schema === "lending/3.1.0" && Array.isArray(root["markets"])) {
+    return (root["markets"] as Array<Record<string, unknown>>).map((p) => `${String(p["name"])} · TVL ${usd(p["totalValueLockedUSD"])}`);
+  }
+  if (schema === "sports-odds/1.0.0" && Array.isArray(root["sportMarkets"])) {
+    return (root["sportMarkets"] as Array<Record<string, unknown>>).map((p) => {
+      const pct = (v: unknown) => `${(Number(v) / 1e16).toFixed(1)}%`;
+      return `${String(p["homeTeam"])} vs ${String(p["awayTeam"])} · home ${pct(p["homeOdds"])} · away ${pct(p["awayOdds"])}`;
+    });
+  }
+  const first = Object.values(root)[0];
+  if (Array.isArray(first)) return first.slice(0, 3).map((r) => JSON.stringify(r).slice(0, 120));
+  return [JSON.stringify(root).slice(0, 160)];
+}
+
+/** Arbitrum blocks are about a quarter second, Ethereum blocks twelve. */
+const SECONDS_PER_BLOCK: Record<"arbitrum" | "ethereum", number> = { arbitrum: 0.25, ethereum: 12 };
+
+/** "--fresh 10" → the block window on the dataset's chain, never below one block. */
+export function freshnessToBlocks(seconds: number, chain: "arbitrum" | "ethereum"): number {
+  return Math.max(1, Math.round(seconds / SECONDS_PER_BLOCK[chain]));
 }
 
 export interface DatasetQuote {
@@ -98,6 +179,8 @@ export interface DatasetQuote {
   amountUsdc: number;
   maxBlockLag: number;
   maxLatencyMs: number;
+  /** svc.payee (subname, then the parent): who a buyer with its own wallet pays */
+  payee: Address | null;
 }
 
 /**
@@ -155,12 +238,16 @@ export async function resolveDatasetQuote(
   readEnsText: EnsTextReader,
 ): Promise<DatasetQuote> {
   const sub = `${dataset.id}.${CONFIG.ens}`;
-  const [subPrice, subSla, rootPrice, rootSla] = await Promise.all([
+  const [subPrice, subSla, rootPrice, rootSla, subPayee, rootPayee] = await Promise.all([
     probeEns(readEnsText, sub, "svc.price"),
     probeEns(readEnsText, sub, "svc.sla"),
     probeEns(readEnsText, CONFIG.ens, "svc.price"),
     probeEns(readEnsText, CONFIG.ens, "svc.sla"),
+    probeEns(readEnsText, sub, "svc.payee"),
+    probeEns(readEnsText, CONFIG.ens, "svc.payee"),
   ]);
+  const payeeRaw = firstNonNull(subPayee, rootPayee);
+  const payee = !payeeRaw.failed && payeeRaw.value !== null && /^0x[0-9a-fA-F]{40}$/.test(payeeRaw.value.trim()) ? (payeeRaw.value.trim() as Address) : null;
   const price = firstNonNull(subPrice, rootPrice);
   if (price.failed) {
     throw new Error(`svc.price is unreachable (${price.failed}) · refusing to buy at a hard-coded price`);
@@ -187,6 +274,7 @@ export async function resolveDatasetQuote(
     amountUsdc,
     maxBlockLag: parsedSla.maxBlockLag,
     maxLatencyMs: parsedSla.maxLatencyMs,
+    payee,
   };
 }
 
@@ -200,19 +288,38 @@ export async function parseBuyArgs(
   readEnsText: EnsTextReader,
 ): Promise<BuyArgs> {
   const id = argv[1];
-  if (!id) throw new Error("usage: buy <dataset> [--amount <usdc>] · try datasets");
+  if (!id) throw new Error("usage: buy <dataset> [--max <usdc>] [--fresh <seconds>] · try datasets");
   const dataset = CONFIG.datasets.find((d) => d.id === id);
   if (!dataset) throw new Error(`unknown dataset: ${id} · try datasets`);
   const quote = await resolveDatasetQuote(dataset, readEnsText);
+  const extra: Pick<BuyArgs, "lagBlocks" | "freshSeconds" | "maxUsdc" | "match"> = {};
+  const fresh = flagValue(argv, "--fresh");
+  if (fresh !== undefined) {
+    const seconds = parseFloat(fresh);
+    if (!Number.isFinite(seconds) || seconds <= 0) throw new Error(`invalid --fresh "${fresh}" · seconds, e.g. 10`);
+    extra.freshSeconds = seconds;
+    extra.lagBlocks = freshnessToBlocks(seconds, dataset.chain);
+  }
+  const max = flagValue(argv, "--max");
+  if (max !== undefined) {
+    const cap = Math.round(parseFloat(max.replace(/[^0-9.]/g, "")) * 1_000_000);
+    if (!Number.isFinite(cap) || cap <= 0) throw new Error(`invalid --max "${max}" · a USDC number, e.g. 0.10`);
+    extra.maxUsdc = cap;
+    if (quote.amountUsdc > cap) {
+      throw new Error(`${quote.priceName} asks ${usdc6(quote.amountUsdc)} USDC per query, above your cap of ${usdc6(cap)} · nothing bought`);
+    }
+  }
+  const match = flagValue(argv, "--match");
+  if (match !== undefined && match.trim().length > 0) extra.match = match.trim();
   const raw = flagValue(argv, "--amount");
   if (raw !== undefined) {
     const parsed = Math.round(parseFloat(raw) * 1_000_000);
     if (!Number.isFinite(parsed) || parsed <= 0) {
       throw new Error(`invalid --amount "${raw}" · a positive USDC number (e.g. 0.10)`);
     }
-    return { datasetId: dataset.id, amountUsdc: parsed };
+    return { datasetId: dataset.id, amountUsdc: parsed, ...extra };
   }
-  return { datasetId: dataset.id, amountUsdc: quote.amountUsdc };
+  return { datasetId: dataset.id, amountUsdc: quote.amountUsdc, ...extra };
 }
 
 /* ------------------------------------------------------------------ buy */
@@ -241,22 +348,35 @@ export function canBuy(input: {
   return { ok: true };
 }
 
-export interface Signer {
-  kind: SignerKind;
-  wallet: WalletClient;
-  address: Address;
+/**
+ * Who signs the act commands. A `circle` signer holds no key in the browser:
+ * the buyer and the seller are Circle developer-controlled wallets on Arc and
+ * every transaction is signed on the server (`/api/circle/*`), gas sponsored
+ * by Circle Gas Station — the same path the page's Try section uses.
+ */
+export type Signer =
+  | { kind: "demo" | "injected"; wallet: WalletClient; address: Address }
+  | { kind: "circle"; address: Address; seller: Address };
+
+/** The `signer` receipt row: who pays, and (for Circle) who is paid. */
+export function describeSigner(signer: Signer): string {
+  if (signer.kind === "circle") {
+    return `Circle buyer wallet ${truncateHash(signer.address)} · seller wallet ${truncateHash(signer.seller)} · gas sponsored by Circle Gas Station`;
+  }
+  if (signer.kind === "injected") {
+    return `your wallet ${signer.address} · you sign each step · gas is Arc's native USDC, paid by your wallet`;
+  }
+  return `${signer.kind} ${truncateHash(signer.address)}`;
 }
 
 /**
- * Keyless signer: the demo key (walletForDemo) wins, then a connected
- * injected wallet (Arc chain added on demand). The instructive error names
- * both recovery paths. Addresses come from the wallet itself, never guessed.
+ * Keyless signer: the deployment's Circle wallets win (the browser signs
+ * nothing), then the demo key (walletForDemo), then a connected injected
+ * wallet (Arc chain added on demand). The instructive error names both
+ * recovery paths. Addresses come from the wallet itself, never guessed.
  */
 export async function resolveSigner(): Promise<{ ok: true; signer: Signer } | { ok: false; reason: string }> {
-  const demo = walletForDemo();
-  if (demo?.account) {
-    return { ok: true, signer: { kind: "demo", wallet: demo, address: demo.account.address } };
-  }
+  // a wallet the reader connected wins: they asked to pay with their own money
   const provider = typeof window !== "undefined" ? getProvider() : undefined;
   if (provider) {
     try {
@@ -266,14 +386,71 @@ export async function resolveSigner(): Promise<{ ok: true; signer: Signer } | { 
         return { ok: true, signer: { kind: "injected", wallet: arcWalletClient(address), address } };
       }
     } catch {
-      // provider present but unreadable — fall through to the connect notice
+      // provider present but unreadable: fall through to the keyless paths
     }
-    return {
-      ok: false,
-      reason: "browser wallet found but no connected account · connect it (Arc testnet) and retry",
-    };
+  }
+  const circle = await circleStatus();
+  if (circle.enabled && circle.buyer && circle.seller) {
+    return { ok: true, signer: { kind: "circle", address: circle.buyer, seller: circle.seller } };
+  }
+  const demo = walletForDemo();
+  if (demo?.account) {
+    return { ok: true, signer: { kind: "demo", wallet: demo, address: demo.account.address } };
+  }
+  if (provider) {
+    return { ok: false, reason: "browser wallet found but no connected account · connect it (Arc testnet) and retry" };
   }
   return { ok: false, reason: "no signer · connect a wallet or set VITE_DEMO_BUYER_KEY" };
+}
+
+const JOB_CREATED_TOPIC = keccak256(toBytes("JobCreated(uint256,address,address,address,uint256,address)"));
+const USDC_SPEND_ABI = parseAbi([
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+]);
+
+/**
+ * Marketplace purchase from the reader's own wallet: the wallet opens the job
+ * naming the ENS payee (the seller's Circle wallet) as provider and the hook's
+ * attester as evaluator, the seller quotes it through the server (setBudget),
+ * then the wallet approves and funds. Three signatures in the wallet; gas is
+ * Arc's native USDC, paid by the wallet.
+ */
+export async function walletOpenJob(
+  publicClient: PublicClient,
+  signer: { wallet: WalletClient; address: Address },
+  p: { datasetId: string; payee: Address; evaluator: Address; sla: Sla; amount6dec: bigint; expirySeconds: number },
+  trace: KvRow[],
+): Promise<bigint> {
+  const { timestamp } = await publicClient.getBlock();
+  const expiredAt = timestamp + BigInt(p.expirySeconds);
+  const chain = signer.wallet.chain;
+  const account = signer.wallet.account ?? signer.address;
+  const send = async (label: string, tx: { address: Address; abi: readonly unknown[]; functionName: string; args: readonly unknown[] }): Promise<`0x${string}`> => {
+    const hash = await signer.wallet.writeContract({ address: tx.address, abi: tx.abi as never, functionName: tx.functionName, args: tx.args as never, account, chain } as never);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    if (receipt.status !== "success") throw new Error(`${label} reverted (${hash})`);
+    trace.push([label, `${hash} · signed in your wallet`]);
+    return hash;
+  };
+  const createHash = await send("createJob", {
+    address: escrowAddress(),
+    abi: ERC8183_ABI,
+    functionName: "createJob",
+    args: [p.payee, p.evaluator, expiredAt, packSla(p.sla), ADDR.hook],
+  });
+  const receipt = await publicClient.getTransactionReceipt({ hash: createHash });
+  const log = receipt.logs.find((l) => l.address.toLowerCase() === escrowAddress().toLowerCase() && l.topics[0] === JOB_CREATED_TOPIC);
+  if (!log?.topics[1]) throw new Error("createJob succeeded but the JobCreated log is missing");
+  const jobId = BigInt(log.topics[1]);
+  const budgetTx = await circleSetBudget({ jobId: jobId.toString(), datasetId: p.datasetId, amount: p.amount6dec.toString() });
+  trace.push(["setBudget", `${budgetTx} · the seller's Circle wallet quoted the job, gas sponsored`]);
+  const allowance = (await publicClient.readContract({ address: ADDR.usdc, abi: USDC_SPEND_ABI, functionName: "allowance", args: [signer.address, escrowAddress()] })) as bigint;
+  if (allowance < p.amount6dec) {
+    await send("approve", { address: ADDR.usdc, abi: USDC_SPEND_ABI, functionName: "approve", args: [escrowAddress(), p.amount6dec * 200n] });
+  }
+  await send("fund", { address: escrowAddress(), abi: ERC8183_ABI, functionName: "fund", args: [jobId, "0x"] });
+  return jobId;
 }
 
 /** Prepare an injected wallet's Arc chain (demo key writes go straight to the RPC). */
@@ -304,6 +481,8 @@ export interface ActJob {
   outcome?: ActOutcome;
   /** the terminal tx hash (settle complete or refund), when known */
   txHash?: `0x${string}`;
+  /** the --match text of the purchase, so "the same data" can repeat it */
+  match?: string;
 }
 
 let actJob: ActJob | null = null;
@@ -591,10 +770,106 @@ export function formatSendError(error: unknown): string {
 
 /* ------------------------------------------------------------------ buy */
 
+/**
+ * A purchase with a freshness demand, measured at delivery: the data is fetched
+ * first, the floor is written from the chain head at that instant minus the
+ * buyer's window, the job is funded and the seller submits the very delivery
+ * that was fetched, then the attester settles. A window tighter than the
+ * seller's real indexing lag is refused by the contract and refunded: a real
+ * failure from a real demand, nothing staged.
+ */
+async function buyWithDemand(
+  ctx: CommandContext,
+  p: { dataset: DatasetConfig; quote: DatasetQuote; args: BuyArgs; signer: Signer },
+  rows: KvRow[],
+): Promise<CommandResult> {
+  const { dataset, quote, args, signer } = p;
+  const secondsPerBlock = SECONDS_PER_BLOCK[dataset.chain];
+  let delivered: Awaited<ReturnType<typeof deliverViaApi>>;
+  try {
+    delivered = await deliverViaApi({ subgraphId: dataset.subgraphId, query: queryFor(dataset, args.match) });
+    if (args.match !== undefined) rows.push(["asked for", args.match]);
+    const lines = summarizeData(dataset.schema, delivered.data);
+    rows.push(["data", lines.length > 0 ? lines.join("  |  ") : "no rows matched"]);
+    rows.push(["delivered", `indexed at block ${delivered.metaBlock.toLocaleString("en-US")} · observed and signed by the server`]);
+  } catch (error) {
+    return { render: "kv", data: { rows: [...rows, ["delivered", `✗ query failed: ${reason(error)}`]] } };
+  }
+  let headInfo: { number: number; ageSeconds: number };
+  try {
+    headInfo = await chainHeadWithAge(dataset.chain);
+  } catch (error) {
+    return { render: "kv", data: { rows: [...rows, ["chain head", `✗ ${reason(error)} · no floor, nothing bought`]] } };
+  }
+  const head = headInfo.number;
+  const age = head - delivered.metaBlock;
+  const ageSeconds = headInfo.ageSeconds + Math.max(0, age) * secondsPerBlock;
+  const floor = floorForWindow(headInfo, args.freshSeconds!, dataset.chain);
+  rows.push(["data age at delivery", `${ageSeconds.toFixed(2)} s · indexed ${age} block${age === 1 ? "" : "s"} behind the ${dataset.chain} head ${head.toLocaleString("en-US")}, which is itself ${headInfo.ageSeconds.toFixed(1)} s old`]);
+  rows.push(["your window", `${args.freshSeconds} s · the seller promises ${(quote.maxBlockLag * secondsPerBlock).toFixed(0)} s (${quote.maxBlockLag} blocks)`]);
+  rows.push(["sla floor", `block ${floor.toLocaleString("en-US")}${floor > head ? ` · ${floor - head} blocks past the head: nothing this fresh exists yet` : ""} · the delivery ${delivered.metaBlock >= floor ? "clears it" : "is below it"}`]);
+  const sla: Sla = { minBlock: floor, schemaHash: keccak256(toBytes(dataset.schema)), maxLatencyMs: quote.maxLatencyMs };
+  let jobId: bigint;
+  let providerAddr: Address;
+  try {
+    if (signer.kind === "circle") {
+      const job = await circleCreateJob({ datasetId: dataset.id, minBlock: floor, schemaHash: sla.schemaHash, maxLatencyMs: sla.maxLatencyMs, amount: String(args.amountUsdc) });
+      jobId = BigInt(job.jobId);
+      providerAddr = signer.seller;
+      rows.push(["fund", `${job.txs.fund} · job ${job.jobId} · Circle buyer wallet, gas sponsored`]);
+    } else if (signer.kind === "injected" && quote.payee !== null) {
+      await ensureChainFor(signer);
+      const evaluator = await readHookAttester(ctx.publicClient);
+      jobId = await walletOpenJob(ctx.publicClient, signer, { datasetId: dataset.id, payee: quote.payee, evaluator, sla, amount6dec: BigInt(args.amountUsdc), expirySeconds: 3600 }, rows);
+      providerAddr = quote.payee;
+    } else {
+      return { render: "kv", data: { rows: [...rows, ["fund", "✗ a freshness demand needs the Circle wallets or a connected wallet"]] } };
+    }
+  } catch (error) {
+    return { render: "kv", data: { rows: [...rows, ["fund", `✗ ${formatSendError(error)}`]] } };
+  }
+  try {
+    const tx = await circleSubmit({ jobId: jobId.toString(), deliverable: delivered.payloadHash, metaBlock: delivered.metaBlock, proof: delivered.proof });
+    rows.push(["submit", `${tx} · the seller's wallet submitted the delivery it fetched`]);
+  } catch (error) {
+    return { render: "kv", data: { rows: [...rows, ["submit", `✗ ${formatSendError(error)}`]] } };
+  }
+  let attested: Awaited<ReturnType<typeof attestViaApi>>;
+  try {
+    attested = await attestViaApi({ jobId: jobId.toString(), deliverable: delivered.payloadHash, metaBlock: delivered.metaBlock, minBlock: floor, proof: delivered.proof });
+  } catch (error) {
+    return { render: "kv", data: { rows: [...rows, ["attest", `✗ ${formatSendError(error)}`]] } };
+  }
+  const settle = attested.settle;
+  const base: ActJob = { datasetId: dataset.id, jobId: jobId.toString(), minBlock: floor, amountUsdc: args.amountUsdc, deadline: 0n, payloadHash: delivered.payloadHash, metaBlock: delivered.metaBlock, proof: delivered.proof, createdAt: Math.floor(Date.now() / 1000), ...(args.match !== undefined ? { match: args.match } : {}) };
+  if (settle === undefined) {
+    setActJob(base);
+    rows.push(["verdict", "✗ the attester posted the proof but did not settle · run `status`"]);
+    return { render: "kv", data: { rows } };
+  }
+  if (settle.verdict === "APPROVE") {
+    rows.push(["verdict", `APPROVE · ${settle.txHash}`]);
+    try {
+      const receipt = await ctx.publicClient.getTransactionReceipt({ hash: settle.txHash });
+      const terms = await platformFee(ctx.publicClient);
+      const split = feeSplitFromReceipt(receipt, terms.feeBP, providerAddr);
+      rows.push(["split", `seller ${usdcTrim(split.seller)} · protocol fee ${usdcTrim(split.treasury)} · total ${usdcTrim(split.total)} USDC`]);
+    } catch (error) {
+      rows.push(["split", `✗ ${reason(error)}`]);
+    }
+    setActJob({ ...base, outcome: "settled", txHash: settle.txHash });
+    return { render: "kv", data: { rows, note: `settled · the data was ${ageSeconds.toFixed(2)} s old and you allowed ${args.freshSeconds} s, so the contract paid the seller` } };
+  }
+  rows.push(["verdict", `REFUSED · complete() reverted ${settle.refusal ?? settle.reason ?? "SlaNotMet"} · reject() ${settle.txHash}`]);
+  rows.push(["refund", `${usdc6(args.amountUsdc)} USDC back to the buyer, in full, no fee`]);
+  setActJob({ ...base, outcome: "refunded", txHash: settle.txHash });
+  return { render: "kv", data: { rows, note: `refunded · the data was ${ageSeconds.toFixed(2)} s old and you allowed ${args.freshSeconds} s: no seller could meet that, the contract refused to pay and the escrow returned the money · nobody asked` } };
+}
+
 const buyCommand: Command = {
   name: "buy",
-  args: "<dataset> [--amount <usdc>]",
-  help: "fund an ERC-8183 job at the live ENS price (demo key or connected wallet)",
+  args: "<dataset> [--max <usdc>] [--fresh <seconds>] [--match <text>]",
+  help: "buy one query of a dataset at its live ENS price: --match narrows the data to a name (a pool like \"WETH/USDC\", a team), --max caps what you will pay in USDC, --fresh is how old the data may be in seconds, measured against the clock at delivery (with --fresh the whole purchase runs: fund, deliver, settle or refund, one receipt). Without --fresh: fund only, then deliver, then settle.",
   kind: "act",
   run: async (ctx, argv) => {
     const rows: KvRow[] = [];
@@ -627,7 +902,7 @@ const buyCommand: Command = {
       };
     }
     const { signer } = signed;
-    rows.push(["signer", signer.kind === "demo" ? `demo ${truncateHash(signer.address)}` : `injected ${truncateHash(signer.address)}`]);
+    rows.push(["signer", describeSigner(signer)]);
 
     let balance: bigint;
     try {
@@ -646,6 +921,10 @@ const buyCommand: Command = {
       return { render: "kv", data: { rows: [...rows, ["gate", `✗ ${gate.reason}`]] } };
     }
 
+    if (args.maxUsdc !== undefined) rows.push(["your cap", `${usdc6(args.maxUsdc)} USDC · the ask ${usdc6(quote.amountUsdc)} is within it`]);
+    // a freshness demand is measured at delivery: fetch first, then write the floor
+    if (args.lagBlocks !== undefined && signer.kind !== "demo") return buyWithDemand(ctx, { dataset, quote, args, signer }, rows);
+
     // The SLA floor is a block on the DATASET's chain (data lives on
     // Arbitrum/Ethereum); the public-RPC branch avoids browser-CORS failures
     // from a keyed Alchemy app (same choice as `quote`).
@@ -661,27 +940,45 @@ const buyCommand: Command = {
         },
       };
     }
+    const lag = args.lagBlocks ?? quote.maxBlockLag;
     const sla: Sla = {
-      minBlock: head - quote.maxBlockLag,
+      minBlock: head - lag,
       schemaHash: keccak256(toBytes(dataset.schema)),
       maxLatencyMs: quote.maxLatencyMs,
     };
-    rows.push(["sla floor", `${sla.minBlock.toLocaleString("en-US")} = head − ${quote.maxBlockLag}`]);
+    if (args.freshSeconds !== undefined) rows.push(["freshness demanded", `${args.freshSeconds} s = ${lag} ${dataset.chain} blocks (the seller promises ${quote.maxBlockLag})`]);
+    rows.push(["sla floor", `${sla.minBlock.toLocaleString("en-US")} = head − ${lag}`]);
 
     let jobId: bigint;
     try {
-      await ensureChainFor(signer);
-      // the hook's attester is the evaluator: it can pay or refund, the buyer cannot
-      const evaluator = await readHookAttester(ctx.publicClient);
-      jobId = await createJobWithSla(ctx.publicClient, {
-        buyer: signer.wallet,
-        provider: signer.wallet,
-        evaluator,
-        sla,
-        amount6dec: BigInt(args.amountUsdc),
-        expirySeconds: 3600,
-        hook: ADDR.hook,
-      });
+      if (signer.kind === "circle") {
+        // server-signed through Circle: createJob → setBudget → approve → fund,
+        // the seller wallet as provider and the hook's attester as evaluator
+        const job = await circleCreateJob({ datasetId: dataset.id, minBlock: sla.minBlock, schemaHash: sla.schemaHash, maxLatencyMs: sla.maxLatencyMs, amount: String(args.amountUsdc) });
+        jobId = BigInt(job.jobId);
+        rows.push(["createJob", `${job.txs.createJob} · Circle buyer wallet`]);
+        rows.push(["setBudget", `${job.txs.setBudget} · Circle seller wallet`]);
+        rows.push(["fund", `${job.txs.fund} · Circle buyer wallet · gas sponsored on every step`]);
+      } else if (signer.kind === "injected" && quote.payee !== null && quote.payee.toLowerCase() !== signer.address.toLowerCase()) {
+        // the reader's own wallet buys from the seller named by ENS
+        await ensureChainFor(signer);
+        const evaluator = await readHookAttester(ctx.publicClient);
+        rows.push(["seller", `${quote.payee} · svc.payee of ${quote.priceName}`]);
+        jobId = await walletOpenJob(ctx.publicClient, signer, { datasetId: dataset.id, payee: quote.payee, evaluator, sla, amount6dec: BigInt(args.amountUsdc), expirySeconds: 3600 }, rows);
+      } else {
+        await ensureChainFor(signer);
+        // the hook's attester is the evaluator: it can pay or refund, the buyer cannot
+        const evaluator = await readHookAttester(ctx.publicClient);
+        jobId = await createJobWithSla(ctx.publicClient, {
+          buyer: signer.wallet,
+          provider: signer.wallet,
+          evaluator,
+          sla,
+          amount6dec: BigInt(args.amountUsdc),
+          expirySeconds: 3600,
+          hook: ADDR.hook,
+        });
+      }
     } catch (error) {
       return {
         render: "kv",
@@ -753,6 +1050,8 @@ const deliverCommand: Command = {
       payloadHash = delivered.payloadHash;
       metaBlock = delivered.metaBlock;
       proof = delivered.proof;
+      const lines = summarizeData(dataset.schema, delivered.data);
+      if (lines.length > 0) rows.push(["data", lines.join("  |  ")]);
       rows.push(["payloadHash", truncateHash(payloadHash, 12, 10)]);
       rows.push(["metaBlock", metaBlock.toLocaleString("en-US")]);
       rows.push(["observed by", proof.length > 0 ? "the server (signed)" : "this browser (local key, unsigned)"]);
@@ -784,14 +1083,22 @@ const deliverCommand: Command = {
       };
     }
     try {
-      await ensureChainFor(signed.signer);
-      const receipt = await submitDeliverable(
-        ctx.publicClient,
-        signed.signer.wallet,
-        BigInt(job.jobId),
-        payloadHash,
-      );
-      rows.push(["submit", `tx ${receipt.transactionHash.slice(0, 10)}…${receipt.transactionHash.slice(-8)} (job → Submitted)`]);
+      const onchain = signed.signer.kind === "circle" ? null : await getJob(ctx.publicClient, BigInt(job.jobId)).catch(() => null);
+      const sellerSubmits = signed.signer.kind === "circle" || (onchain !== null && onchain.provider.toLowerCase() !== signed.signer.address.toLowerCase());
+      if (sellerSubmits) {
+        // the seller's Circle wallet submits, after the server re-checks the deliver signature
+        const tx = await circleSubmit({ jobId: job.jobId, deliverable: payloadHash, metaBlock, proof });
+        rows.push(["submit", `${tx} · the seller's Circle wallet submitted (job → Submitted)`]);
+      } else if (signed.signer.kind !== "circle") {
+        await ensureChainFor(signed.signer);
+        const receipt = await submitDeliverable(
+          ctx.publicClient,
+          signed.signer.wallet,
+          BigInt(job.jobId),
+          payloadHash,
+        );
+        rows.push(["submit", `tx ${receipt.transactionHash.slice(0, 10)}…${receipt.transactionHash.slice(-8)} (job → Submitted)`]);
+      }
     } catch (error) {
       return {
         render: "kv",
@@ -858,6 +1165,14 @@ const settleCommand: Command = {
     if (attested.settle) {
       // the attester is this job's evaluator: it already completed or refunded
       result = { verdict: attested.settle.verdict, reason: attested.settle.reason as VerifyDeliveryResult["reason"], minBlock: job.minBlock, txHash: attested.settle.txHash };
+    } else if (signer.kind === "circle") {
+      return {
+        render: "kv",
+        data: {
+          rows: [["job", job.jobId], ["attest", "ok"], ["settle", "✗ the attester posted the proof but did not settle: it is not this job's evaluator"]],
+          note: "a Circle purchase names the hook's attester as evaluator at createJob; this job was opened another way — settle it from the wallet that opened it",
+        },
+      };
     } else try {
       await ensureChainFor(signer);
       result = await verifyDelivery(
@@ -891,15 +1206,16 @@ const settleCommand: Command = {
     rows.push(["minBlock", result.minBlock.toLocaleString("en-US")]);
 
     if (result.txHash !== undefined) {
-      rows.push(["tx", `${result.txHash.slice(0, 10)}…${result.txHash.slice(-8)}`]);
+      rows.push(["tx", result.txHash]);
       if (result.verdict === "APPROVE") {
         try {
           const receipt = await ctx.publicClient.getTransactionReceipt({ hash: result.txHash as `0x${string}` });
           const terms = await platformFee(ctx.publicClient);
-          // Single-key operation: the signer is buyer, provider and evaluator
-          // (legal per the verified spec) — the seller side of the split is
-          // the same address that funded the job.
-          const split = feeSplitFromReceipt(receipt, terms.feeBP, signer.address);
+          // Circle: the seller wallet is the provider. Single-key operation:
+          // the signer is buyer, provider and evaluator (legal per the verified
+          // spec), so the seller side of the split is the funding address.
+          const providerAddr = signer.kind === "circle" ? signer.seller : ((await getJob(ctx.publicClient, BigInt(job.jobId)).catch(() => null))?.provider ?? signer.address);
+          const split = feeSplitFromReceipt(receipt, terms.feeBP, providerAddr);
           // Trimmed 6dp: a 3000-raw treasury fee is 0.003, never "0.00" (usdc6
           // rounds to 2dp and would read as "no fee"); raw units stay visible.
           rows.push(["split", `seller ${usdcTrim(split.seller)} · treasury ${usdcTrim(split.treasury)} · total ${usdcTrim(split.total)} (fee ${split.feeBP} bp · raw ${split.seller}/${split.treasury}/${split.total})`]);

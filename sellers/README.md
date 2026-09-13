@@ -6,7 +6,7 @@ Each file is a `SellerConfig` written by `sell init` (one storefront per file):
 {
   "name": "alpha",                    // slug; the ENS subname is <slug>.openbook.eth
   "ens": "alpha.openbook.eth",        // ENSv2 name (Sepolia) whose svc.* records price the storefront
-  "escrow": "0x967e005154D0F62C33Eac8E2F44b44d4C4C07Dd5",  // shared market escrow (2% venue fee)
+  "escrow": "0x967e005154D0F62C33Eac8E2F44b44d4C4C07Dd5",  // shared market escrow (2% protocol fee)
   "hook": "0x606075F3Cf9b5B66E7e4DD2ea369894374Ff0846",    // SlaHook whitelisted on the escrow
   "payee": "0x…",                     // seller payout address (written as svc.payee)
   "operatorKey": "SELLER_ALPHA_PK",   // env var NAME of the seller's signing key — never a literal key

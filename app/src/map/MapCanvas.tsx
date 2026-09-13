@@ -366,10 +366,37 @@ function NodeShape({
         {node.title}
       </text>
       <text className={`map__node-chip ${live.state}`} y={54} textAnchor="middle">
-        {chip}
+        {chipLines(chip).map((row, i) => (
+          <tspan key={i} x={0} dy={i === 0 ? 0 : 14}>
+            {row}
+          </tspan>
+        ))}
       </text>
     </g>
   );
+}
+
+/**
+ * Wrap a chip on its " · " separators so neighbouring nodes (190 units apart,
+ * 12px mono) never overprint: at most CHIP_COLS characters per line, three
+ * lines, the last one elided.
+ */
+export const CHIP_COLS = 24;
+export function chipLines(text: string, cols: number = CHIP_COLS, maxLines = 3): string[] {
+  const parts = text.split(" · ");
+  const lines: string[] = [];
+  let current = "";
+  for (const part of parts) {
+    const next = current.length === 0 ? part : `${current} · ${part}`;
+    if (next.length <= cols || current.length === 0) current = next;
+    else {
+      lines.push(current);
+      current = part;
+    }
+  }
+  if (current.length > 0) lines.push(current);
+  if (lines.length > maxLines) return [...lines.slice(0, maxLines - 1), `${lines[maxLines - 1]!.slice(0, cols - 1)}…`];
+  return lines;
 }
 
 export function SystemMap(): JSX.Element {

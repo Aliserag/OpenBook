@@ -1,8 +1,8 @@
 /**
- * Market panel (M5) - the venue surface of the marketplace: every seller
+ * Market panel (M5) - the market surface: every seller
  * discovered LIVE from the ENS storefront (`openbook.eth`), each with its
  * datasets, prices, freshness guarantee and per-provider market stats from
- * the subgraph, plus the venue row read live from the escrow
+ * the subgraph, plus the protocol-fee row read live from the escrow
  * (`platformFeeBP` + `platformTreasury` -> "2% → PolicyWallet").
  *
  * No mocked, static or synthesized data: every figure comes from ENS, the
@@ -119,7 +119,7 @@ export function venuePercent(feeBP: number): string {
   return `${pct.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}%`;
 }
 
-/** The venue treasury, named when it is the live-read PolicyWallet address. */
+/** The protocol treasury, named when it is the live-read PolicyWallet address. */
 export function venueTreasuryLabel(treasury: `0x${string}`): string {
   return treasury.toLowerCase() === ADDR.policy.toLowerCase() ? "PolicyWallet" : truncateHash(treasury);
 }
@@ -189,7 +189,7 @@ async function parentRow(records: ParentRecords, providers: readonly ProviderSta
     menu,
     price: records.price,
     sla,
-    payee: null, // the parent's payee is the venue treasury; the escrow read owns that row
+    payee: null, // the parent's payee is the protocol treasury; the escrow read owns that row
     operator: records.operator,
     priceByDataset,
     stats: statsFor(records.operator, providers),

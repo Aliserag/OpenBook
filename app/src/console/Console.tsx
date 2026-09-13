@@ -40,6 +40,7 @@ import { CONFIG } from "../config";
 import { env } from "../env";
 import { demoAddress, getPublicClient, pickSigner } from "../data/chain";
 import { fetchLagShared } from "../data/subgraph";
+import { STUDIO_GATE } from "../data/cache";
 import { useLiveValue } from "../ui/useLiveValue";
 import { createEnsTextReader } from "../../../mcp/src/ens";
 import { commands, dispatch, find, type CommandContext, type CommandResult } from "./registry";
@@ -50,11 +51,12 @@ import {
   buildSystemPrompt,
   llmConfigured,
   missingKeyRefusal,
-  offerAskFor,
   proposalLine,
+  parseFreshnessSeconds,
+  FRESHNESS_QUESTION,
   registrySchema,
   requiresRun,
-  SUGGESTED_ASKS,
+  suggestionsFor,
   type AskMode,
   type AskOutcome,
   type AskProposal,
@@ -69,6 +71,7 @@ import { copyAckReducer, copyAckText, type CopyAck } from "./blocks/copyAck";
 import { verdictFor, type Verdict } from "./blocks/verdict";
 import { completionCandidates, Palette, paletteItems, type CompletionItem } from "./palette";
 import { getSandboxState } from "./commands/sandbox"; // registers the sandbox commands (side effect)
+import { getActJob } from "./commands/act";
 import "./commands/inspect"; // registers the inspect commands (side effect)
 import "./commands/act"; // registers buy/deliver/settle (side effect)
 import "./tape.css";
@@ -85,6 +88,8 @@ interface Entry {
   ask?: AskOutcome;
   /** ask-mode in-flight: the model being asked (renders "asking <model>…") */
   asking?: string;
+  /** printed by the page itself (the escrow feed), not typed: no prompt, its own badge */
+  system?: boolean;
 }
 
 interface TabPopover {
@@ -95,11 +100,16 @@ interface TabPopover {
 function LiveChip({
   label,
   read,
+  gateKey,
 }: {
   label: string;
   read: () => Promise<string>;
+  /** shared cooldown gate (the Studio chip shares the page's) */
+  gateKey?: string;
 }): JSX.Element {
-  const live = useLiveValue(read, { pollMs: 15_000, staleAfterMs: 45_000 });
+  // last-good per chip: a failed first read shows the previous value marked
+  // stale (hover for the reason) instead of a bare "error" until the next poll
+  const live = useLiveValue(read, { pollMs: 15_000, staleAfterMs: 45_000, cacheKey: `console.${label}`, gateKey });
   const text =
     live.state === "live"
       ? `${label} ${live.value}`
@@ -124,21 +134,23 @@ function LiveChip({
 
 /** Receipt header kind chip label + state class for an entry. */
 function entryBadge(entry: Entry): { label: string; stateClass: string } {
-  if (entry.error !== undefined) return { label: "ERROR", stateClass: " tape__kind--error" };
-  if (entry.countdownUntil !== undefined) return { label: "COUNTDOWN", stateClass: " tape__kind--countdown" };
-  if (entry.ask !== undefined || entry.asking !== undefined) return { label: "ASK", stateClass: "" };
-  if (entry.results === null) return { label: "FEED", stateClass: "" };
+  if (entry.system) return { label: "refund", stateClass: " tape__kind--error" };
+  if (entry.error !== undefined) return { label: "error", stateClass: " tape__kind--error" };
+  if (entry.countdownUntil !== undefined) return { label: "countdown", stateClass: " tape__kind--countdown" };
+  if (entry.ask !== undefined || entry.asking !== undefined) return { label: "ask", stateClass: "" };
+  if (entry.results === null) return { label: "running", stateClass: "" };
+  // plain words: a first-time reader should know what kind of receipt this is
   const labels: Record<string, string> = {
-    text: "LOG",
-    kv: "KV",
-    table: "TABLE",
-    ruler: "RULER",
-    tx: "TX",
-    frames: "FRAMES",
+    text: "output",
+    kv: "details",
+    table: "table",
+    ruler: "freshness",
+    tx: "transaction",
+    frames: "replay",
   };
   const render = entry.results[0]?.render ?? "text";
   return {
-    label: labels[render] ?? render.toUpperCase(),
+    label: labels[render] ?? render,
     stateClass: render === "tx" ? " tape__kind--tx" : "",
   };
 }
@@ -200,19 +212,30 @@ function AskReceiptBlock({
       <p className="console__ask-why">
         {proposal.rationale} · by {model}
       </p>
-      {gated ? (
+      {proposal.command === "buy" ? (
+        <p className="console__ask-note">a purchase · the console asks how fresh the data must be, then runs buy, deliver and settle, one receipt each</p>
+      ) : proposal.command === "sandbox stale" ? (
+        <p className="console__ask-note">the fail run · executes now, every step prints below</p>
+      ) : gated ? (
         <button type="button" className="console__ask-run" onClick={() => onRun(proposal)}>
           Run ↵ <span className="console__ask-run-note">nothing auto-executes</span>
         </button>
       ) : (
-        <p className="console__ask-note">read-only · Enter runs it like a typed command</p>
+        <p className="console__ask-note">read-only · ran below</p>
       )}
     </div>
   );
 }
 
-export function Console(): JSX.Element {
-  const [open, setOpen] = useState(false);
+/**
+ * `inline` renders the console open inside the hero (no launcher, no close):
+ * it is the page's main call to action. `dock` is the fixed bottom drawer used
+ * on secondary routes (the system map).
+ */
+export function Console({ variant = "dock" }: { variant?: "dock" | "inline" } = {}): JSX.Element {
+  const inline = variant === "inline";
+  const [open, setOpen] = useState(inline);
+  const sectionRef = useRef<HTMLElement | null>(null);
   const [mode, setMode] = useState<AskMode>("command");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const paletteOpenedDrawerRef = useRef(false);
@@ -223,6 +246,8 @@ export function Console(): JSX.Element {
   const [popover, setPopover] = useState<TabPopover | null>(null);
   const [copyAck, setCopyAck] = useState<CopyAck | null>(null);
   const [pendingAsk, setPendingAsk] = useState<{ proposal: AskProposal } | null>(null);
+  /** a spoken purchase waiting for its freshness answer */
+  const [pendingFresh, setPendingFresh] = useState<{ datasetId: string; max?: string; match?: string } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const seqRef = useRef(0);
@@ -245,6 +270,18 @@ export function Console(): JSX.Element {
     [],
   );
 
+  /** Close: the dock hides; the inline console only gives focus back to the page. */
+  const close = (): void => {
+    if (inline) inputRef.current?.blur();
+    else setOpen(false);
+  };
+
+  /** Bring the inline console into view and focus its input (⌘K, Buy buttons, chips elsewhere). */
+  const reveal = (): void => {
+    sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    inputRef.current?.focus();
+  };
+
   /** Registry snapshot (side-effect imports in commands/* populate it once). */
   const allCommands = useMemo(() => commands(), []);
   const paletteItemsMemo = useMemo(() => paletteItems(allCommands, CONFIG.datasets), [allCommands]);
@@ -263,7 +300,7 @@ export function Console(): JSX.Element {
         setPaletteOpen(false);
         if (paletteOpenedDrawerRef.current) {
           paletteOpenedDrawerRef.current = false;
-          setOpen(false);
+          if (!inline) setOpen(false);
         }
         return;
       }
@@ -273,6 +310,8 @@ export function Console(): JSX.Element {
         // a second ⌘K opens the command palette over it; a third closes the palette
         if (paletteOpen) {
           setPaletteOpen(false);
+        } else if (inline && document.activeElement !== inputRef.current) {
+          reveal();
         } else if (!open) {
           paletteOpenedDrawerRef.current = false;
           setOpen(true);
@@ -290,7 +329,21 @@ export function Console(): JSX.Element {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, paletteOpen]);
+  }, [open, paletteOpen, inline]);
+
+  // Buy buttons elsewhere on the page run a line here: `openbook:console-run` { line }
+  useEffect(() => {
+    const onRun = (event: Event): void => {
+      const line = (event as CustomEvent<{ line?: string }>).detail?.line;
+      if (typeof line !== "string" || line.length === 0) return;
+      if (!open) setOpen(true);
+      reveal();
+      void runLine(line);
+    };
+    window.addEventListener("openbook:console-run", onRun);
+    return () => window.removeEventListener("openbook:console-run", onRun);
+  });
+
 
   useEffect(() => {
     if (open && !paletteOpen) inputRef.current?.focus();
@@ -299,7 +352,10 @@ export function Console(): JSX.Element {
   // keep the newest print in view
   useEffect(() => {
     const el = bodyRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    // the tape's scroll container is the body around the entries (overflow-y: auto)
+    const scroller = el.closest<HTMLElement>(".console__body") ?? el;
+    scroller.scrollTop = scroller.scrollHeight;
   }, [entries]);
 
   // the printed copy-ack auto-fades after a beat (value change only)
@@ -320,8 +376,16 @@ export function Console(): JSX.Element {
     setCopyAck((prev) => copyAckReducer(prev, { type: "failed", entryId, hash }));
   };
 
-  const runLine = async (line: string): Promise<void> => {
-    if (line.length === 0) return;
+  // the chips follow the tape: the last completed line and the act job's stage
+  const lastDone = [...entries].reverse().find((en) => !en.system && (en.results !== null || en.error !== undefined));
+  const actJob = getActJob();
+  const suggestions = suggestionsFor({
+    lastLine: lastDone?.line ?? null,
+    job: actJob === null ? null : { jobId: actJob.jobId, datasetId: actJob.datasetId, delivered: actJob.payloadHash !== undefined, ...(actJob.outcome !== undefined ? { outcome: actJob.outcome } : {}) },
+  });
+
+  const runLine = async (line: string): Promise<CommandResult | null> => {
+    if (line.length === 0) return null;
     // a typed line supersedes any pending proposal (the explicit keyboard way)
     setPendingAsk(null);
     setHistory((h) => [...h, line]);
@@ -339,10 +403,28 @@ export function Console(): JSX.Element {
             : en,
         ),
       );
+      return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setEntries((es) => es.map((en) => (en.id === id ? { ...en, error: message } : en)));
+      return null;
     }
+  };
+
+  /** Print a line the console says back (a question, a confirmation), not a command. */
+  const say = (line: string, text: string): void => {
+    const id = seqRef.current++;
+    setEntries((es) => [...es, { id, line, at: Date.now(), results: [{ render: "text", data: text }] }]);
+  };
+
+  /**
+   * A spoken purchase: buy with the buyer's cap and freshness, then deliver,
+   * then settle, one receipt each, stopping at the first step that fails.
+   */
+  const runPurchasePlan = async (datasetId: string, freshSeconds: number, max?: string, match?: string): Promise<void> => {
+    const flags = `--fresh ${freshSeconds}${max !== undefined ? ` --max ${max}` : ""}${match !== undefined ? ` --match "${match.replace(/"/g, "")}"` : ""}`;
+    // with a freshness window the buy runs the whole purchase (fund, deliver, settle or refund) in one receipt
+    await runLine(`buy ${datasetId} ${flags}`);
   };
 
   /** Execute a confirmed proposal through the SAME dispatch path as a typed
@@ -381,7 +463,32 @@ export function Console(): JSX.Element {
         allCommands,
       );
       setEntries((es) => es.map((en) => (en.id === id ? { ...en, asking: undefined, ask: outcome } : en)));
-      if (outcome.status === "proposal") setPendingAsk({ proposal: outcome.proposal });
+      if (outcome.status === "proposal") {
+        const picked = find(outcome.proposal.command);
+        const argv = outcome.proposal.argv;
+        if (picked !== undefined && !requiresRun(picked.kind)) {
+          // a read: run it now, the proposal receipt above shows what was picked and why
+          void runLine(proposalLine(outcome.proposal));
+        } else if (outcome.proposal.command === "sandbox stale") {
+          // a spoken fail run is the demo's second act: run it, it prints every step
+          void runLine(proposalLine(outcome.proposal));
+        } else if (outcome.proposal.command === "buy" && argv[0] !== undefined) {
+          const at = argv.indexOf("--fresh");
+          const maxAt = argv.indexOf("--max");
+          const matchAt = argv.indexOf("--match");
+          const max = maxAt >= 0 ? argv[maxAt + 1] : undefined;
+          const match = matchAt >= 0 ? argv[matchAt + 1] : undefined;
+          const fresh = at >= 0 ? parseFloat(argv[at + 1] ?? "") : NaN;
+          if (Number.isFinite(fresh) && fresh > 0) {
+            void runPurchasePlan(argv[0], fresh, max, match);
+          } else {
+            setPendingFresh({ datasetId: argv[0], max, match });
+            say(`ask · ${text}`, FRESHNESS_QUESTION);
+          }
+        } else {
+          setPendingAsk({ proposal: outcome.proposal });
+        }
+      }
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       const message = err.name === "AbortError" ? "ask cancelled" : err.message;
@@ -430,14 +537,8 @@ export function Console(): JSX.Element {
         setMode("command");
         return;
       }
-      // command mode: the SAME predicate as the nudge decides the switch —
-      // Tab switches to ask exactly when the nudge offers it, and completes
-      // otherwise (strict prefixes like `qu` complete to `quote`, never
-      // fight the nudge, round-1 review).
-      if (offerAskFor(input, allCommands, CONFIG.datasets)) {
-        setMode("ask");
-        return;
-      }
+      // command mode: Tab completes a command prefix; plain language needs no mode switch
+      // any more (Enter routes it to the model), so a line with no completion just stays
       complete();
       return;
     }
@@ -463,6 +564,25 @@ export function Console(): JSX.Element {
         runProposal(pendingAsk.proposal);
         return;
       }
+      // the answer to "how fresh?": a time runs the purchase, anything else is a new question
+      if (pendingFresh !== null && text.length > 0 && find(text) === undefined) {
+        const seconds = parseFreshnessSeconds(text);
+        const plan = pendingFresh;
+        setInput("");
+        if (seconds === null) {
+          say(`ask · ${text}`, "I need a time, for example: under 10 seconds, or a minute");
+          return;
+        }
+        setPendingFresh(null);
+        say(`ask · ${text}`, `freshness set to ${seconds} second${seconds === 1 ? "" : "s"} · buying ${plan.datasetId}${plan.match !== undefined ? ` for "${plan.match}"` : ""}${plan.max !== undefined ? ` with a cap of ${plan.max} USDC` : ""} now`);
+        void runPurchasePlan(plan.datasetId, seconds, plan.max, plan.match);
+        return;
+      }
+      // plain language goes to the model: anything that is not a known command is a question
+      if (text.length > 0 && find(text) === undefined) {
+        void runAsk(text);
+        return;
+      }
       void runLine(text);
       return;
     }
@@ -479,11 +599,11 @@ export function Console(): JSX.Element {
         setPendingAsk(null);
         return;
       }
-      setOpen(false);
+      close();
     }
   };
 
-  if (!open) {
+  if (!open && !inline) {
     return (
       <button
         type="button"
@@ -497,19 +617,22 @@ export function Console(): JSX.Element {
   }
 
   return (
-    <section className="console" aria-label="openbook console · the receipt printer">
+    <section ref={sectionRef} id="console" className={inline ? "console console--inline" : "console"} aria-label="openbook console · the receipt printer">
       <header className="console__head">
         <span className="console__title">console</span>
+        {!inline && (
         <span className="console__chips">
-          <LiveChip label="arc" read={() => getPublicClient().getBlockNumber().then((n) => n.toLocaleString("en-US"))} />
-          <LiveChip label="subgraph" read={() => fetchLagShared().then((l) => `idx ${l.indexed.toLocaleString("en-US")} · ${l.rows} rows`)} />
-          <LiveChip label="ens" read={() => readEnsText(CONFIG.ens, "svc.price").then((p) => (p === null ? "no price" : p))} />
+          <LiveChip label={inline ? "Arc block" : "arc"} read={() => getPublicClient().getBlockNumber().then((n) => n.toLocaleString("en-US"))} />
+          <LiveChip label={inline ? "indexed" : "subgraph"} gateKey={STUDIO_GATE} read={() => fetchLagShared().then((l) => (inline ? l.indexed.toLocaleString("en-US") : `idx ${l.indexed.toLocaleString("en-US")} · ${l.rows} rows`))} />
+          <LiveChip label={inline ? "openbook.eth" : "ens"} read={() => readEnsText(CONFIG.ens, "svc.price").then((p) => (p === null ? "no price" : inline ? p.replace(/\/query$/, "") : p))} />
         </span>
-        <span className="console__hints">⌘K palette · Tab complete · mode chip · ↵ runs · Esc close</span>
+        )}
+        <span className="console__hints">{inline ? "⌘K palette · Tab complete · ↵ runs" : "⌘K palette · Tab complete · mode chip · ↵ runs · Esc close"}</span>
         <button
           type="button"
           className="console__close"
-          onClick={() => setOpen(false)}
+          hidden={inline}
+          onClick={close}
           aria-label="close console (⌘K)"
         >
           ×
@@ -521,8 +644,8 @@ export function Console(): JSX.Element {
           {entries.length === 0 ? (
             <div className="console__empty">
               <p className="console__empty-line">
-                the receipt printer · every command prints a block · ask below, or run one of the
-                mapped chips
+                ask in plain English, pick a chip, or type a command · every one runs against the live escrow and
+                prints a receipt · a purchase waits for your Enter before it spends
               </p>
               <p className="tape__hints">
                 <kbd>⌘K</kbd> palette · <kbd>Tab</kbd> complete or ask · <kbd>↑↓</kbd> history ·{" "}
@@ -536,16 +659,20 @@ export function Console(): JSX.Element {
               return (
                 <article className="console__entry tape__receipt" key={entry.id}>
                   <header className="tape__rec-head">
-                    <span className="tape__serial">#{String(entry.id + 1).padStart(4, "0")}</span>
+                    <span className="tape__serial">receipt {entry.id + 1}</span>
                     <time className="tape__at" dateTime={new Date(entry.at).toISOString()}>
                       {formatPrintedAt(entry.at)}
                     </time>
                     <span className={`tape__kind${badge.stateClass}`}>{badge.label}</span>
                   </header>
-                  <div className="console__line">
-                    <span className="console__prompt" aria-hidden="true">
-                      ›
-                    </span>{" "}
+                  <div className={entry.system ? "console__line console__line--system" : "console__line"}>
+                    {!entry.system && (
+                      <>
+                        <span className="console__prompt" aria-hidden="true">
+                          ›
+                        </span>{" "}
+                      </>
+                    )}
                     {entry.line}
                   </div>
                   <div className="console__result">
@@ -629,8 +756,8 @@ export function Console(): JSX.Element {
       )}
 
       <div className="console__asks">
-        <span className="console__asks-cap">try these</span>
-        {SUGGESTED_ASKS.map((ask) => (
+        <span className="console__asks-cap">{entries.length === 0 ? "try these" : "next"}</span>
+        {suggestions.map((ask) => (
           <button
             type="button"
             key={ask.line}
@@ -643,16 +770,6 @@ export function Console(): JSX.Element {
         ))}
       </div>
 
-      {mode === "command" && offerAskFor(input, allCommands, CONFIG.datasets) && (
-        <div className="console__nudge">
-          <span>
-            did you mean to ask? press <kbd>Tab</kbd> to switch to ask mode
-          </span>
-          <button type="button" className="console__nudge-ask" onClick={() => setMode("ask")}>
-            ask
-          </button>
-        </div>
-      )}
 
       <div className="console__inputrow">
         <button

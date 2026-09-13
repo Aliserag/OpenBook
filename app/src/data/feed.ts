@@ -56,7 +56,7 @@ export interface BoardRow {
  * The OpenBook market escrow (0x967e…) is a fresh instance: its job ids are
  * small (52 at submission). The shared reference escrow (0x0747…) is at six
  * digits. The landing page books only the market escrow, so prices, ids and
- * counts on the page describe one venue; the reference-escrow history stays
+ * counts on the page describe one market; the reference-escrow history stays
  * reachable through the console and the replay theater.
  */
 export const MARKET_ESCROW_MAX_JOB_ID = 100_000n;

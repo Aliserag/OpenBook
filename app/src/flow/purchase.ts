@@ -113,7 +113,7 @@ export async function liveDeps(publicClient: PublicClient = getPublicClient()): 
   if (circle.enabled && circle.buyer && circle.seller) return circleDeps(publicClient, circle.buyer, circle.seller);
   const signed = await resolveSigner();
   const signer = signed.ok ? signed.signer : null;
-  const wallet = signer ? signer.wallet : null;
+  const wallet = signer && signer.kind !== "circle" ? signer.wallet : null;
   const needWallet = (): WalletClient => {
     if (!wallet) throw new Error("no signer");
     return wallet;
@@ -131,7 +131,7 @@ export async function liveDeps(publicClient: PublicClient = getPublicClient()): 
     chainHead: (chain) => defaultChainHeadResolver(undefined)(chain),
     createJob: async (p, trace) => {
       const w = tracedWallet(needWallet(), trace);
-      // the venue's attester adjudicates: it is the evaluator, so it can pay or refund
+      // the protocol's attester adjudicates: it is the evaluator, so it can pay or refund
       const evaluator = await readHookAttester(publicClient);
       return createJobWithSla(publicClient, {
         buyer: w,
@@ -312,7 +312,7 @@ export async function runPurchase(
     try {
       delivered = await d.query(dataset);
     } catch (error) {
-      return fail("deliver", `The data query failed: ${plainReason(error)}${paid ? " · the money is still in escrow and comes back to the buyer after the deadline (about an hour), the venue's sweeper reclaims it" : ""}`);
+      return fail("deliver", `The data query failed: ${plainReason(error)}${paid ? " · the money is still in escrow and comes back to the buyer after the deadline (about an hour), the protocol's sweeper reclaims it" : ""}`);
     }
     // who observed the block: recover the signer from the proof and compare with the hook's attester
     const observer = await d.proofSigner(delivered.payloadHash, delivered.metaBlock, delivered.proof);

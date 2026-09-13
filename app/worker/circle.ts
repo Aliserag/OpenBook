@@ -284,6 +284,46 @@ export function parseCircleSubmitRequest(raw: unknown): CircleSubmitRequest | st
   return { jobId: r.jobId, deliverable: r.deliverable as Hex, metaBlock: r.metaBlock, proof: r.proof };
 }
 
+export interface CircleBudgetRequest {
+  jobId: string;
+  datasetId: string;
+  /** 6dp raw amount the buyer will fund: must equal the live ENS price */
+  amount: string;
+}
+
+export function parseCircleBudgetRequest(raw: unknown): CircleBudgetRequest | string {
+  if (typeof raw !== "object" || raw === null) return "body must be a JSON object";
+  const r = raw as Record<string, unknown>;
+  if (typeof r.jobId !== "string" || !/^\d{1,12}$/.test(r.jobId)) return "jobId must be a decimal string";
+  if (typeof r.datasetId !== "string" || !DATASETS.some((d) => d.id === r.datasetId)) return "datasetId is not one of the datasets this deployment sells";
+  if (typeof r.amount !== "string" || !/^\d{1,12}$/.test(r.amount)) return "amount must be a 6dp raw decimal string";
+  return { jobId: r.jobId, datasetId: r.datasetId, amount: r.amount };
+}
+
+/**
+ * A buyer with its own wallet opened a job naming the Circle seller wallet as
+ * provider (the ENS payee); the seller sets the budget so the buyer can fund
+ * it. Refused unless the job is still open, sold by this seller, unbudgeted,
+ * and the amount is the live ENS price of the dataset.
+ */
+export async function circleSetBudget(env: CircleEnv, req: CircleBudgetRequest): Promise<{ txHash: Hex; seller: Hex; amount: string }> {
+  const pub = createPublicClient({ chain: arcTestnet, transport: http(ARC_RPC) });
+  const job = await pub.readContract({ address: ESCROW, abi: ESCROW_ABI, functionName: "jobs", args: [BigInt(req.jobId)] });
+  const [, client, provider, , , budget, , status] = job;
+  if (provider.toLowerCase() !== env.sellerAddress.toLowerCase()) throw new Error(`job ${req.jobId} does not name the Circle seller wallet as provider`);
+  if (client.toLowerCase() === env.sellerAddress.toLowerCase()) throw new Error(`job ${req.jobId} was opened by the seller wallet itself`);
+  if (status !== 0) throw new Error(`job ${req.jobId} is not open for a budget (status ${status})`);
+  if (budget !== 0n) throw new Error(`job ${req.jobId} already has a budget`);
+  const terms = await resolveSellerTerms(req.datasetId, env.sepoliaRpc);
+  if (BigInt(req.amount) !== BigInt(terms.amount6dec)) throw new Error(`the amount ${req.amount} is not the live ENS price of ${terms.name} (${terms.amount6dec})`);
+  const setBudget = await contractExecution(env, env.sellerWalletId, {
+    contractAddress: ESCROW,
+    abiFunctionSignature: "setBudget(uint256,uint256,bytes)",
+    abiParameters: [req.jobId, req.amount, "0x"],
+  });
+  return { txHash: setBudget.txHash, seller: env.sellerAddress, amount: req.amount };
+}
+
 /** The seller wallet submits the deliverable the attester signed for a job it is the provider of. */
 export async function circleSubmit(env: CircleEnv, req: CircleSubmitRequest, attesterPk: string): Promise<{ txHash: Hex; seller: Hex }> {
   const pub = createPublicClient({ chain: arcTestnet, transport: http(ARC_RPC) });

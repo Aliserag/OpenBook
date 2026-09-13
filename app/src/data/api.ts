@@ -175,6 +175,16 @@ export async function circleCreateJob(input: { datasetId: string; minBlock: numb
   return root as CircleJob;
 }
 
+/** The Circle seller wallet quotes (setBudget) a job an outside wallet opened for it, at the live ENS price. */
+export async function circleSetBudget(input: { jobId: string; datasetId: string; amount: string }): Promise<`0x${string}`> {
+  const base = apiBase();
+  if (base === null) throw new Error("Circle wallets run on the server; local runs use the demo key");
+  const { status, json, text } = await postJson(`${base}/api/circle/budget`, input);
+  const root = (typeof json === "object" && json !== null ? json : {}) as { txHash?: string; error?: string };
+  if (status >= 400 || typeof root.txHash !== "string") throw new Error(root.error ?? `circle budget failed (${status}): ${text.slice(0, 160)}`);
+  return root.txHash as `0x${string}`;
+}
+
 /** The Circle seller wallet submits the deliverable the attester signed. */
 export async function circleSubmit(input: { jobId: string; deliverable: `0x${string}`; metaBlock: number; proof: string }): Promise<`0x${string}`> {
   const base = apiBase();

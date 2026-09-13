@@ -14,6 +14,7 @@
  * tested contract; askLlm does the OpenAI-compatible fetch, retrying once at
  * temperature 0 when the response does not validate, then refusing.
  */
+import { getActJob } from "./commands/act";
 import { CONFIG } from "../config";
 import { env } from "../env";
 import { ADDR } from "../data/addresses";
@@ -190,9 +191,26 @@ export function requiresRun(kind: CommandKind): boolean {
   return kind === "act" || kind === "sandbox";
 }
 
+/** Words a buyer uses for time → seconds; null when no time can be read. */
+export function parseFreshnessSeconds(text: string): number | null {
+  const t = text.trim().toLowerCase().replace(/^(under|within|less than|at most|max(imum)?|no more than|no older than)\s+/, "");
+  const words: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, fifteen: 15, twenty: 20, thirty: 30, sixty: 60, half: 0.5 };
+  const m = /^(\d+(?:\.\d+)?|[a-z]+)(?:\s+(?:a|an))?\s*(ms|milliseconds?|s|secs?|seconds?|m|mins?|minutes?|h|hrs?|hours?)\b/.exec(t);
+  if (!m) return null;
+  const n = /^\d/.test(m[1]!) ? parseFloat(m[1]!) : words[m[1]!];
+  if (n === undefined || !Number.isFinite(n) || n <= 0) return null;
+  const unit = m[2]!;
+  const mult = /^ms|milli/.test(unit) ? 0.001 : /^(s|sec)/.test(unit) ? 1 : /^(m|min)/.test(unit) ? 60 : 3600;
+  return n * mult;
+}
+
+/** The question the console asks when a spoken purchase gave no freshness. */
+export const FRESHNESS_QUESTION = "How fresh does the data need to be? Reply with a time, for example: under 10 seconds";
+
 /** The dispatchable line for a proposal: command name + argv, whitespace-joined. */
 export function proposalLine(proposal: AskProposal): string {
-  return proposal.argv.length > 0 ? `${proposal.command} ${proposal.argv.join(" ")}` : proposal.command;
+  const quoted = proposal.argv.map((a) => (/\s/.test(a) && !/^["']/.test(a) ? `"${a.replace(/"/g, "")}"` : a));
+  return quoted.length > 0 ? `${proposal.command} ${quoted.join(" ")}` : proposal.command;
 }
 
 /** The registry schema block: every command as one line (name, args, kind, help). */
@@ -226,6 +244,11 @@ export function buildSystemPrompt(schema: string, liveContext: string): string {
     "- argv holds the arguments only, never the command name; zero-arg commands take an empty argv",
     "- if the request cannot map to a registry command, reply {\"refusal\": \"<why>\"}",
     "- never invent a command name, an argument, or a value: pick from the registry, fill argv from the context or the question",
+    "- a request to get, fetch or buy data maps to buy <dataset>: a spend limit ('max 10 cents', 'up to 0.10') becomes --max <usdc as a decimal, cents converted>; a freshness requirement ('under 10 seconds', 'no older than a minute') becomes --fresh <seconds>; when no freshness was given, omit --fresh and the console will ask",
+    "- 'show all data markets', 'what can I buy', 'list datasets' map to datasets",
+    "- a named thing narrows the data with --match <text>: the ETH price, WETH, a pool → uniswap-v3-arbitrum-dex with --match \"WETH/USDC\" (a pool name; other pairs likewise, e.g. \"ARB/USDC\"); a lending market or borrow rate → aave-v3-arbitrum-lending with --match <asset>; a team, a game, odds, a match → overtime-sports-odds with --match <the first team named, e.g. \"Charlotte 49ers\">",
+    "- 'make it fail', 'make the same purchase fail', 'show me a refund', 'what if the data is stale' map to sandbox stale <dataset> (the last purchase's dataset from the context, else overtime-sports-odds)",
+    "- 'the same data' / 'the same thing' keeps the last purchase's dataset AND its --match text from the context",
   ].join("\n");
 }
 
@@ -249,7 +272,7 @@ export function llmConfigured(apiKey: string): boolean {
 }
 
 /**
- * Best-effort live context block for the system prompt: escrow, venue fee +
+ * Best-effort live context block for the system prompt: escrow, protocol fee +
  * treasury, the seller list with live ENS prices, and the dataset ids. Any
  * source that fails renders its reason inline, never a hard-coded figure.
  */
@@ -257,10 +280,10 @@ export async function buildLiveAskContext(): Promise<string> {
   const readEns = createEnsTextReader({ rpcUrl: env.sepoliaRpc });
   const lines: string[] = [];
 
-  let feeLine = "venue fee: ✗ unreachable";
+  let feeLine = "protocol fee: ✗ unreachable";
   try {
     const { feeBP, treasury } = await platformFee(getPublicClient());
-    feeLine = `venue fee: ${feeBP} bp (${(feeBP / 100).toFixed(0)}%) · treasury ${truncateHash(treasury)}`;
+    feeLine = `protocol fee: ${feeBP} bp (${(feeBP / 100).toFixed(0)}%) · treasury ${truncateHash(treasury)}`;
   } catch {
     // keep the ✗ reason line
   }
@@ -288,6 +311,10 @@ export async function buildLiveAskContext(): Promise<string> {
   lines.push(`- ${feeLine}`);
   lines.push(`- sellers (live ENS prices, ${CONFIG.ens}): ${priced.join(" · ")}`);
   lines.push(`- dataset ids: ${CONFIG.datasets.map((d) => d.id).join(", ")}`);
+  const last = getActJob();
+  if (last !== null) {
+    lines.push(`- last purchase in this session: job ${last.jobId} of ${last.datasetId}${last.match !== undefined ? ` with --match "${last.match}"` : ""}${last.outcome !== undefined ? ` (${last.outcome})` : " (open)"} · "the same purchase", "the same data", "it", "that" refer to ${last.datasetId}${last.match !== undefined ? ` --match "${last.match}"` : ""}`);
+  }
   return lines.join("\n");
 }
 
@@ -402,10 +429,118 @@ export interface SuggestedAsk {
 }
 
 export const SUGGESTED_ASKS: SuggestedAsk[] = [
-  { label: "Buy the next UFC card's odds, freshness matters", line: "buy overtime-sports-odds" },
-  { label: "What has the venue earned?", line: "books" },
-  { label: "Show the last refund", line: "jobs --state refunded" },
-  { label: "How fresh is the sports data?", line: "quote overtime-sports-odds" },
-  { label: "Who's selling and at what price?", line: "datasets" },
-  { label: "Refuse a stale delivery (demo)", line: "sandbox stale" },
+  { label: "Get me the odds for Charlotte 49ers vs Western Carolina, max 10 cents, under 10 seconds old", line: 'buy overtime-sports-odds --match "Charlotte 49ers" --max 0.10 --fresh 10' },
+  { label: "Same odds, but no older than a tenth of a second", line: 'buy overtime-sports-odds --match "Charlotte 49ers" --fresh 0.1' },
+  { label: "What data can I buy?", line: "datasets" },
+  { label: "How fresh are the sports odds right now?", line: "quote overtime-sports-odds" },
+  { label: "What has the protocol earned?", line: "books" },
+  { label: "Show me the last refund", line: "jobs --state refunded" },
 ];
+
+/** What the console knows after the last receipt: the act job's stage and the last line run. */
+export interface SuggestionContext {
+  /** the last completed command line, null on a fresh tape */
+  lastLine: string | null;
+  /** the act job (buy → deliver → settle), null when none */
+  job: { jobId: string; datasetId: string; delivered: boolean; outcome?: "settled" | "refunded" } | null;
+}
+
+const DEFAULT_DATASET = "overtime-sports-odds";
+const DEFAULT_MATCH = "Charlotte 49ers";
+
+function datasetArg(line: string, fallback: string): string {
+  const parts = line.trim().split(/\s+/);
+  const arg = parts[0] === "sandbox" ? parts[2] : parts[1];
+  return arg !== undefined && !arg.startsWith("--") ? arg : fallback;
+}
+
+const EARNED: SuggestedAsk = { label: "What has the protocol earned?", line: "books" };
+const ODDS_FRESH: SuggestedAsk = { label: "Get me the odds for Charlotte 49ers vs Western Carolina, under 10 seconds old", line: `buy ${DEFAULT_DATASET} --match "${DEFAULT_MATCH}" --fresh 10` };
+const ODDS_TIGHT: SuggestedAsk = { label: "Same odds, but no older than a tenth of a second", line: `buy ${DEFAULT_DATASET} --match "${DEFAULT_MATCH}" --fresh 0.1` };
+
+/**
+ * The next moves, keyed to what just happened, worded the way a person would
+ * ask: after a settled purchase the tighter demand that no seller can meet,
+ * after a refund the replay and the refunds, after a quote the purchase. Every
+ * line resolves in the registry and needs no key on the deployed site.
+ */
+export function suggestionsFor(ctx: SuggestionContext): SuggestedAsk[] {
+  const line = ctx.lastLine?.trim() ?? "";
+  const head = line.split(/\s+/).slice(0, 2).join(" ");
+  const job = ctx.job;
+  const ds = job?.datasetId ?? DEFAULT_DATASET;
+  const stage = job === null ? "none" : job.outcome !== undefined ? job.outcome : job.delivered ? "delivered" : "funded";
+
+  if (line.startsWith("quote")) {
+    const d = datasetArg(line, DEFAULT_DATASET);
+    return [
+      { label: `Buy one query of ${d}, under 10 seconds old`, line: `buy ${d} --fresh 10` },
+      { label: "Ask for it fresher than any seller can promise", line: `buy ${d} --fresh 0.1` },
+      { label: "What data can I buy?", line: "datasets" },
+      EARNED,
+    ];
+  }
+  if (job !== null && (line.startsWith("buy") || line.startsWith("deliver") || line.startsWith("settle") || head === "sandbox stale" || line === "status")) {
+    if (stage === "funded") {
+      return [
+        { label: `Deliver the data for job ${job.jobId}`, line: "deliver" },
+        { label: "Where does this purchase stand?", line: "status" },
+        { label: `Open job ${job.jobId} from the subgraph`, line: `job ${job.jobId}` },
+      ];
+    }
+    if (stage === "delivered") {
+      return [
+        { label: `Settle job ${job.jobId}: pay the seller or refund me`, line: "settle" },
+        { label: "Where does this purchase stand?", line: "status" },
+        { label: `Open job ${job.jobId} from the subgraph`, line: `job ${job.jobId}` },
+      ];
+    }
+    if (stage === "settled") {
+      return [
+        { label: `Replay job ${job.jobId} frame by frame`, line: `replay ${job.jobId}` },
+        { label: "Now ask for the same data fresher than any seller can promise", line: `buy ${ds} --fresh 0.1` },
+        EARNED,
+        { label: "Show me the settled purchases", line: "jobs --state settled" },
+      ];
+    }
+    return [
+      { label: `Replay the refund of job ${job.jobId}`, line: `replay ${job.jobId}` },
+      { label: "Show me every refund", line: "jobs --state refunded" },
+      EARNED,
+      { label: `Buy ${ds} again, allowing 10 seconds`, line: `buy ${ds} --fresh 10` },
+    ];
+  }
+  if (line === "books") {
+    return [
+      { label: "Show me the purchases behind those numbers", line: "jobs" },
+      { label: "How far behind the chain is the subgraph?", line: "lag" },
+      { label: "Who holds the treasury, and what can it spend?", line: "policy show" },
+      ...(job !== null ? [{ label: `Replay job ${job.jobId}`, line: `replay ${job.jobId}` }] : [ODDS_FRESH]),
+    ];
+  }
+  if (line.startsWith("jobs") || line.startsWith("job ")) {
+    return [...(job !== null ? [{ label: `Replay job ${job.jobId}`, line: `replay ${job.jobId}` }] : []), EARNED, ODDS_FRESH, ODDS_TIGHT];
+  }
+  if (line === "datasets" || head === "ens show" || head === "ens can-edit") {
+    return [
+      { label: "How fresh are the sports odds right now?", line: `quote ${DEFAULT_DATASET}` },
+      { label: "Show me the seller's ENS records", line: "ens show" },
+      ODDS_FRESH,
+      EARNED,
+    ];
+  }
+  if (line === "lag" || line.startsWith("replay")) {
+    return [EARNED, { label: "Show me the purchases", line: "jobs" }, ODDS_FRESH, ODDS_TIGHT];
+  }
+  if (head === "policy show") {
+    return [
+      { label: "Show me the treasury's refused withdrawals", line: "policy refusals" },
+      { label: "Try to overspend the treasury (simulated)", line: "policy try-overspend 50" },
+      EARNED,
+    ];
+  }
+  if (head === "policy refusals" || head === "policy try-overspend" || head === "sandbox claim") {
+    return [{ label: "Show me the treasury's caps and spend", line: "policy show" }, EARNED, ODDS_FRESH];
+  }
+  return SUGGESTED_ASKS;
+}

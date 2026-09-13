@@ -699,10 +699,11 @@
 .console .console__input::placeholder { color: var(--muted); }
 
 .console .console__input:focus { outline: none; }
-.console .console__input:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
+.console .console__input:focus-visible { outline: none; }
 
+/* focus shows as an ink underline on the whole input row, not a box around the field */
 .console .console__inputrow:focus-within {
-  box-shadow: inset 0 -1px 0 var(--accent);
+  box-shadow: inset 0 -2px 0 var(--ink);
 }
 
 .tape__rowhint {
@@ -973,3 +974,18 @@
   .tape__rec-head { flex-wrap: wrap; }
   .tape__kind { margin-left: 0; }
 }
+
+/* a receipt the page printed itself (the escrow feed): no prompt, quieter line */
+.console .console__line--system {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.tape__copy {
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+.tape__copy:hover { color: var(--accent); }

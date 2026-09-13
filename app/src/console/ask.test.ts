@@ -22,6 +22,8 @@ import {
   registrySchema,
   requiresRun,
   SUGGESTED_ASKS,
+  suggestionsFor,
+  parseFreshnessSeconds,
   validateProposal,
   type AskInput,
   type AskProposal,
@@ -342,7 +344,50 @@ describe("SUGGESTED_ASKS", () => {
     for (const ask of SUGGESTED_ASKS) {
       expect(find(ask.line), `chip line "${ask.line}" must resolve`).toBeDefined();
     }
-    expect(SUGGESTED_ASKS.some((a) => a.line === "buy overtime-sports-odds")).toBe(true);
+    expect(SUGGESTED_ASKS.some((a) => a.line === 'buy overtime-sports-odds --match "Charlotte 49ers" --max 0.10 --fresh 10')).toBe(true);
     expect(SUGGESTED_ASKS.some((a) => a.line === "datasets")).toBe(true);
+  });
+});
+
+describe("suggestionsFor", () => {
+  const funded = { jobId: "101", datasetId: "overtime-sports-odds", delivered: false };
+  it("a fresh tape gets the static six", () => {
+    expect(suggestionsFor({ lastLine: null, job: null })).toBe(SUGGESTED_ASKS);
+  });
+  it("walks the purchase: buy → deliver, deliver → settle, settle → replay and the fail run", () => {
+    expect(suggestionsFor({ lastLine: "buy overtime-sports-odds", job: funded })[0]?.line).toBe("deliver");
+    expect(suggestionsFor({ lastLine: "deliver", job: { ...funded, delivered: true } })[0]?.line).toBe("settle");
+    const after = suggestionsFor({ lastLine: "settle", job: { ...funded, delivered: true, outcome: "settled" } });
+    expect(after.map((a) => a.line)).toEqual(["replay 101", "buy overtime-sports-odds --fresh 0.1", "books", "jobs --state settled"]);
+  });
+  it("after a refund the chips lead to the replay and the refunds", () => {
+    const lines = suggestionsFor({ lastLine: "sandbox stale overtime-sports-odds", job: { ...funded, delivered: true, outcome: "refunded" } }).map((a) => a.line);
+    expect(lines[0]).toBe("replay 101");
+    expect(lines).toContain("jobs --state refunded");
+  });
+  it("a quote leads to buying that dataset, and every chip resolves in the registry", () => {
+    const chips = suggestionsFor({ lastLine: "quote aave-v3-arbitrum-lending", job: null });
+    expect(chips[0]?.line).toBe("buy aave-v3-arbitrum-lending --fresh 10");
+    const contexts = [
+      { lastLine: "books", job: funded }, { lastLine: "jobs", job: null }, { lastLine: "datasets", job: null }, { lastLine: "lag", job: null },
+      { lastLine: "policy show", job: null }, { lastLine: "policy refusals", job: null }, { lastLine: "status", job: funded }, { lastLine: "help", job: null },
+    ];
+    for (const ctx of [...contexts, { lastLine: "quote", job: null }]) {
+      for (const ask of suggestionsFor(ctx)) expect(find(ask.line), `chip line "${ask.line}" must resolve`).toBeDefined();
+    }
+  });
+});
+
+describe("parseFreshnessSeconds", () => {
+  it("reads the ways a buyer says a time", () => {
+    expect(parseFreshnessSeconds("under 1 second")).toBe(1);
+    expect(parseFreshnessSeconds("10 seconds")).toBe(10);
+    expect(parseFreshnessSeconds("within 30s")).toBe(30);
+    expect(parseFreshnessSeconds("a minute")).toBe(60);
+    expect(parseFreshnessSeconds("no older than 2 min")).toBe(120);
+    expect(parseFreshnessSeconds("half a minute")).toBe(30);
+    expect(parseFreshnessSeconds("500 ms")).toBe(0.5);
+    expect(parseFreshnessSeconds("fresh please")).toBeNull();
+    expect(parseFreshnessSeconds("")).toBeNull();
   });
 });

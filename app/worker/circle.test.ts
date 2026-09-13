@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { circleEnvFrom, entitySecretCiphertext, parseCircleJobRequest, parseCircleSubmitRequest } from "./circle";
+import { circleEnvFrom, entitySecretCiphertext, parseCircleBudgetRequest, parseCircleJobRequest, parseCircleSubmitRequest } from "./circle";
 
 describe("circle env", () => {
   const good: Record<string, string> = {
@@ -42,5 +42,14 @@ describe("entity secret ciphertext", () => {
     expect(c1).not.toBe(c2);
     const dec = await crypto.subtle.decrypt({ name: "RSA-OAEP" }, pair.privateKey, Uint8Array.from(atob(c1), (ch) => ch.charCodeAt(0)));
     expect([...new Uint8Array(dec)].map((b) => b.toString(16).padStart(2, "0")).join("")).toBe(secret);
+  });
+});
+
+describe("parseCircleBudgetRequest", () => {
+  it("accepts a job id, a sold dataset and a 6dp amount, and names what is wrong otherwise", () => {
+    expect(parseCircleBudgetRequest({ jobId: "104", datasetId: "overtime-sports-odds", amount: "100000" })).toEqual({ jobId: "104", datasetId: "overtime-sports-odds", amount: "100000" });
+    expect(parseCircleBudgetRequest({ jobId: "x", datasetId: "overtime-sports-odds", amount: "100000" })).toContain("jobId");
+    expect(parseCircleBudgetRequest({ jobId: "1", datasetId: "nope", amount: "100000" })).toContain("datasetId");
+    expect(parseCircleBudgetRequest({ jobId: "1", datasetId: "overtime-sports-odds", amount: "0.10" })).toContain("amount");
   });
 });

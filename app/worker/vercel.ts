@@ -5,9 +5,9 @@
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { LLM_BASE_DEFAULT, LLM_MODEL_DEFAULT, ask, attest, deliver, fetchStudio, parseAttestRequest, parseDeliverRequest, sepoliaRpc } from "./shared";
-import { circleCreateJob, circleEnvFrom, circleStatus, circleSubmit, parseCircleJobRequest, parseCircleSubmitRequest } from "./circle";
+import { circleCreateJob, circleEnvFrom, circleSetBudget, circleStatus, circleSubmit, parseCircleBudgetRequest, parseCircleJobRequest, parseCircleSubmitRequest } from "./circle";
 
-export type Route = "subgraph" | "deliver" | "attest" | "ask" | "sepolia" | "circle-status" | "circle-job" | "circle-submit";
+export type Route = "subgraph" | "deliver" | "attest" | "ask" | "sepolia" | "circle-status" | "circle-job" | "circle-budget" | "circle-submit";
 
 const FRESH_MS = 45_000;
 const KEEP_MS = 21_600_000; // 6 h, same as the Cloudflare worker
@@ -123,6 +123,15 @@ export async function handler(route: Route, req: IncomingMessage & { body?: unkn
           return;
         }
         send(res, 200, JSON.stringify(await circleCreateJob(cenv, parsed)));
+        return;
+      }
+      if (route === "circle-budget") {
+        const parsed = parseCircleBudgetRequest(parseJson(body));
+        if (typeof parsed === "string") {
+          send(res, 400, JSON.stringify({ error: parsed }));
+          return;
+        }
+        send(res, 200, JSON.stringify(await circleSetBudget(cenv, parsed)));
         return;
       }
       const parsed = parseCircleSubmitRequest(parseJson(body));

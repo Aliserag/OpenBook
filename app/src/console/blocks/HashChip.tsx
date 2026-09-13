@@ -5,7 +5,7 @@
  * Truncated display copies the full value — the chip never copies a "…".
  */
 import type { JSX } from "react";
-import { truncateHash } from "../../format";
+import { explorerAddressUrl, explorerUrl, truncateHash } from "../../format";
 
 /**
  * Split a string into plain text parts and full hex tokens. Only COMPLETE
@@ -72,6 +72,36 @@ export function HashChip({
       else onCopyFailed?.(hash);
     });
   };
+  // a full transaction hash or address opens on ArcScan; the small chip beside it copies
+  const href = hash.length === 66 ? explorerUrl(hash) : hash.length === 42 ? explorerAddressUrl(hash) : null;
+  const copyChip = (
+    <span
+      className="tape__copy"
+      role="button"
+      tabIndex={0}
+      title={`copy ${hash}`}
+      aria-label={`copy ${hash} to the clipboard`}
+      onClick={copy}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          copy();
+        }
+      }}
+    >
+      ⧉
+    </span>
+  );
+  if (href !== null) {
+    return (
+      <>
+        <a className="tape__hash" href={href} target="_blank" rel="noreferrer" title={`${hash} · open on ArcScan`}>
+          {truncateHash(hash)}
+        </a>
+        {copyChip}
+      </>
+    );
+  }
   return (
     <span
       className="tape__hash"

@@ -37,7 +37,7 @@ const ENS = createEnsTextReader({ rpcUrl: env.sepoliaRpc });
 type Summary = { kind: "settled" | "refunded" | "failed"; text: string };
 
 export function TryIt({ armed, onArmedConsumed }: { armed: "fresh" | "fail" | null; onArmedConsumed(): void }): JSX.Element {
-  const [datasetId, setDatasetId] = useState(CONFIG.datasets[0]?.id ?? "");
+  const [datasetId, setDatasetId] = useState(CONFIG.datasets.find((d) => d.id === "overtime-sports-odds")?.id ?? CONFIG.datasets[0]?.id ?? "");
   const [quote, setQuote] = useState<DatasetQuote | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [mode, setMode] = useState<"fresh" | "fail">("fresh");
@@ -96,17 +96,8 @@ export function TryIt({ armed, onArmedConsumed }: { armed: "fresh" | "fail" | nu
         at: Math.floor(Date.now() / 1000),
         refundReason: result.refundReason,
       });
-      setSummary(
-        result.outcome === "settled"
-          ? {
-              kind: "settled",
-              text: `Settled. The seller was paid ${priceLabel(result.amount ?? 0)} minus the 2% venue fee. Every step above is a real transaction on Arc.`,
-            }
-          : {
-              kind: "refunded",
-              text: `Refunded. ${priceLabel(result.amount ?? 0)} went back to the buyer because the delivery missed the freshness floor. The hook refused payment, so the refund was the only settlement the escrow allowed.`,
-            },
-      );
+      // the stepper's last two rows already say settled or refunded; no closing bubble
+      setSummary(null);
     } else if (!result.ok) {
       setSummary({ kind: "failed", text: result.reason ?? "The run stopped." });
     }
@@ -117,8 +108,10 @@ export function TryIt({ armed, onArmedConsumed }: { armed: "fresh" | "fail" | nu
       <div className="section__head">
         <h2 id="try-title">Try it. No wallet needed.</h2>
         <p className="lede">
-          Pick a dataset and buy one query on the live escrow. Then make the same purchase fail on purpose and
-          watch the escrow give the money back.
+          Watch recourse happen. Buy the newest sports odds with real money on the live escrow: the price and the
+          freshness promise come from the seller's name, and the delivery is checked against that promise before
+          anyone is paid. Then make the same purchase fail on purpose and watch the money come back without anyone
+          asking for it.
         </p>
       </div>
       <div className="try">
@@ -163,12 +156,11 @@ export function TryIt({ armed, onArmedConsumed }: { armed: "fresh" | "fail" | nu
             </button>
           </div>
           <p className="tiny try__hint">
-            Buy runs the real purchase. Make it fail runs the same purchase but demands data newer than what
-            arrives, so the contract has to refuse payment and the escrow refunds. The buyer is a Circle
-            developer-controlled wallet on Arc that we fund with testnet USDC; the seller is a second Circle wallet,
-            the one the dataset's ENS record names as payee. Every transaction is signed on the server through
-            Circle, with gas sponsored by Circle Gas Station. The venue's attester adjudicates each job: it signs
-            the block it observed, and the contract enforces that signed block against the floor.
+            Why it matters: today an agent that pays for bad data has no way to get its money back, so nobody
+            lets agents spend. Here the refund is not a policy, it is the contract: the freshness promise is written
+            into the escrow at payment time, the delivered block is checked against it onchain, and a miss is
+            refunded in the same step. Both wallets are Circle wallets with sponsored gas, so there is nothing to
+            install; every row below links to its transaction.
           </p>
         </div>
         <div className="try__run">

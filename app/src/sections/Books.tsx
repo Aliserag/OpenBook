@@ -49,7 +49,7 @@ function Row({ row, isNew }: { row: BoardRow; isNew: boolean }): JSX.Element {
   );
 }
 
-export function Books(): JSX.Element {
+export function Books({ board = true }: { board?: boolean } = {}): JSX.Element {
   const feed = useFeed();
   const runs = useSessionRuns();
   const fee = useLiveValue(() => platformFee(getPublicClient()), { pollMs: 60_000, staleAfterMs: 180_000 });
@@ -74,7 +74,6 @@ export function Books(): JSX.Element {
     for (const r of rows) seen.current.add(r.jobId);
     if (rows.length > 0) primed.current = true;
   });
-  const refusals = feed.value?.refusals ?? [];
 
   return (
     <section id="books" className="section wrap" aria-labelledby="books-title">
@@ -96,7 +95,7 @@ export function Books(): JSX.Element {
         </div>
         <div className="figure">
           <strong>{feed.value ? priceLabel(t.feesUsdc) : feed.state === "error" ? "?" : "…"}</strong>
-          <span className="small">venue fees earned</span>
+          <span className="small">protocol fees earned</span>
         </div>
         <div className="figure">
           <strong>{treasury.value !== null ? priceLabel(treasury.value) : "…"}</strong>
@@ -115,6 +114,7 @@ export function Books(): JSX.Element {
           refresh
         </button>
       </p>
+      {board && (
       <ol className="board" aria-label="latest settlements and refunds">
         {rows.length === 0 && (
           <li className="board__empty">
@@ -129,29 +129,7 @@ export function Books(): JSX.Element {
           <Row key={r.jobId} row={r} isNew={fresh.has(r.jobId)} />
         ))}
       </ol>
-      <div className="refusals">
-        <h3>
-          {feed.value
-            ? `The treasury refused ${refusals.length} withdrawal${refusals.length === 1 ? "" : "s"}`
-            : "The treasury refuses withdrawals, onchain"}
-        </h3>
-        <p className="small">
-          Seller revenue lands in a treasury with a per-transaction cap, a daily cap and an allowlist. Every refused
-          withdrawal is published onchain, so the books show the refusals too.
-        </p>
-        {refusals.length > 0 && (
-          <ul className="refusals__list">
-            {refusals.slice(0, 6).map((r) => (
-              <li key={r.id}>
-                <span className="mono">{r.reason.replace(/_/g, " ").toLowerCase()}</span>
-                <a href={explorerUrl(r.id.slice(0, 66))} target="_blank" rel="noreferrer">
-                  {truncateHash(r.id.slice(0, 66), 8, 6)}
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      )}
     </section>
   );
 }

@@ -1,79 +1,87 @@
-# OpenBook: The Data Marketplace for Agents
+# OpenBook: The Data Marketplace for AI Agents
 
 [![ci](https://github.com/Aliserag/OpenBook/actions/workflows/ci.yml/badge.svg)](https://github.com/Aliserag/OpenBook/actions/workflows/ci.yml)
 
-> The data marketplace for agents, with automatic refunds for every stale delivery.
-> An autonomous agent that sells freshness-guaranteed onchain data queries, pays its own
-> costs, and publishes its P&L onchain. Built for ETHOnline 2026 (Sep 4–16).
+> **The data marketplace for AI agents, with automatic refunds for every stale delivery.**
+> Sellers are ENS names. Buyers pay into an escrow on Arc with a freshness promise written
+> in. Deliveries arrive through The Graph stamped with their indexed block. A contract
+> compares the stamp with the promise and pays the seller, or refunds the buyer.
+> Built for ETHOnline 2026 (Sep 4–16).
+
+[![OpenBook: the demo video](https://img.youtube.com/vi/OLUNTuVyvac/hqdefault.jpg)](https://www.youtube.com/watch?v=OLUNTuVyvac)
+
+| | |
+| --- | --- |
+| **Demo video** (3:55) | https://www.youtube.com/watch?v=OLUNTuVyvac |
+| **Live app**, no wallet needed | https://openbook.litai.ca |
+| **The market** | https://openbook.litai.ca/#market |
+| **Architecture** | [docs/architecture.md](docs/architecture.md) |
 
 **Bounties targeted (one project, three sponsors):**
-- **Arc: Best DeFi/Onchain Finance Application** ($3,500; +$2,500 for a mainnet deployment by Sep 30). Circle tools in the money path: Arc, USDC as gas, Circle Wallets (developer-controlled SCA buyer and seller), Circle Gas Station, the ERC-8183 reference escrow. Not the Agent Stack CLI, Nanopayments or x402, and we say so below.
+- **Arc: Best DeFi/Onchain Finance Application** ($3,500; +$2,500 for a mainnet deployment by Sep 30). Circle tools in the money path: Arc with USDC as gas, the ERC-8183 reference escrow with our SlaHook, Circle Wallets (developer-controlled SCA buyer and seller), Circle Gas Station, App Kit Bridge and Gateway for treasury funding, and an x402 pay-per-call lane through Circle Nanopayments.
 - **The Graph: Best AI Tooling or AI Use Case with The Graph (Start Fresh)** ($5,000 pool)
 - **ENS: Best Use of ENSv2** ($4,500)
 
 ## The pitch
 
-**The data marketplace for agents, with automatic refunds for every stale delivery.**
-Payment is the last mile of agent autonomy. Agents can hold keys and sign transactions, but
-counterparties can't trust them: no service guarantees, no refunds, no recourse when the data
-is stale. Everyone is building payment rails; nobody is building the control layer — a marketplace
-fixes that: **sellers are ENS names** (a seller is an ENSv2 subname with four text records that
-price and reprice themselves), **agents
-compare**, **the escrow enforces** the SLA committed at payment time, and **the venue takes
-2%** — of everyone's settlements.
+Agents already spend real money on data at machine speed, and when the data is stale there
+is no refund, no dispute, nobody to call. Bad data costs the average organization
+[$12.9M a year](https://www.ibm.com/think/topics/data-quality) (Gartner, via IBM),
+[54% of organizations are deploying AI agents](https://kpmg.com/us/en/media/blogs/2026/q1-ai-pulse-3.html)
+(KPMG, Q1 2026), and Gartner expects
+[more than 40% of agentic AI projects to be canceled by 2027](https://www.gartner.com/en/newsroom/press-releases/2025-06-25-gartner-predicts-over-40-percent-of-agentic-ai-projects-will-be-canceled-by-end-of-2027),
+naming inadequate risk controls among the reasons. The rails exist. The recourse does not.
 
-**Why now:** 54% of organizations are already deploying AI agents
-([KPMG U.S. AI Pulse, Q1 2026](https://kpmg.com/us/en/media/blogs/2026/q1-ai-pulse-3.html)) and
-agentic commerce is projected at [$1.5T globally by 2030](https://www.juniperresearch.com/press/agentic-commerce-set-to-generate-15-trillion-globally-by-2030-as-payments-infrastructure-leaders-revealed/),
-yet [27% of consumers trust no organization to run an AI shopping agent and 24% will never
-delegate a purchase to one](https://www.checkout.com/newsroom/consumer-demand-for-ai-shopping-is-forming-fast-but-trust-for-agentic-commerce-is-still-catching-up).
-The constraint is recourse, not capability. **Buyers** (any agent, and the operator funding
-it) get recourse they can verify without trusting the seller; **sellers** of paid data get a
-freshness guarantee they can charge for.
+**Recourse is the missing primitive of the agentic economy.** OpenBook is the data
+marketplace for AI agents, with automatic refunds for every stale delivery: the first market
+where the payment undoes itself, by contract, if the data is not what was promised.
+**Sellers are ENS names** (an ENSv2 name or subname with four text records that price and
+reprice themselves), **agents compare**, **the escrow enforces** the freshness promise
+committed at payment time, and **the protocol takes 2%** of every settlement. Buyers get
+recourse they can verify without trusting the seller. Sellers get a freshness guarantee they
+can charge for.
 
-OpenBook's mechanic: **SLA-bound payments.** Every query carries verifiable conditions
-committed at payment time (freshness block height, deliverable hash, deadline) through
-Arc's ERC-8183 escrow standard. Settlement checks them deterministically. **Miss the SLA and
-the hook blocks payment; the refund follows in the same step, onchain.** Money flows both ways.
+**The mechanic: SLA-bound payments.** Every query is an ERC-8183 job on Arc with the
+conditions packed in at payment time: the freshness block floor, the deliverable hash, the
+deadline. The delivery arrives through The Graph with its indexed block. Our `SlaHook`
+compares the block with the floor before any payout. Clear it and `complete()` pays 98% to
+the seller and 2% to the protocol. Miss it and the hook reverts `SlaNotMet`; the escrow
+refunds the buyer in the same step, onchain.
 
-**Watch the money move backwards (one click, no wallet):** a delivery pinned to a stale
-`_meta` block got `REJECT (STALE_DATA)` and the escrow refunded the buyer on its own, 
-[Refunded tx 0x25e7805a…6063f on ArcScan](https://testnet.arcscan.app/tx/0x25e7805ae79fd8320ccbc74d90dead9d87b082fd299ecfe5a5949a968e16063f),
-indexed in the agent's books ([the live books](https://openbook.litai.ca/#books), 
-no keys needed; [raw subgraph](https://api.studio.thegraph.com/query/1760032/open-book/v0.0.8)).
-On the marketplace escrow the same mechanic refunded two stale deliveries in full:
-[job 42 (0.15)](https://testnet.arcscan.app/tx/0xcef2e16b6028c650d6a33f9e3838d57f3d99e62963d6c6e3194e71ed19c40ca1)
-and [job 46 (0.12)](https://testnet.arcscan.app/tx/0x85ef3525ea9e57818a6c99f8e858ed36a2994be1d30b8ce02b3d78a76964b9aa) —
-refund == funded amount for both. The hook gates every settlement: `complete()` on
-an unattested job reverts `MissingAttestation` (a call, so it leaves no transaction;
-reproduce it with `cast call` on job 38 before its attestation), and the settle that
-followed the attestation landed at
-[0xd93aa95e…3ec4b6](https://testnet.arcscan.app/tx/0xd93aa95ee6552568653a8acfda21998a3173a87f537ebca79cf2d35ffd3ec4b6).
+**Both outcomes are in the video, signed from a plain browser wallet on the live escrow:**
+job 116 asked for sports odds fresh within 10 seconds and settled
+([0x769685cd…4cc2fd](https://testnet.arcscan.app/tx/0x769685cdda5a6df5606baef78241ce6a065ad89193f0b4641afc33e9644cc2fd):
+0.098 USDC to the seller, 0.002 USDC to the treasury); job 117 asked for the same odds no
+older than a tenth of a second, the delivery arrived three seconds old, and the contract
+refused and refunded the full 0.10 USDC
+([0x39d92b9e…db6012](https://testnet.arcscan.app/tx/0x39d92b9e041a3bf7065a1718d876aec21df7bf7914fc4814ad8e8fbd47db6012)).
+Every settlement, refund and fee is indexed by our `open-book` subgraph into public books
+([the market](https://openbook.litai.ca/#market); [raw subgraph](https://api.studio.thegraph.com/query/1760032/open-book/v0.0.8)).
 
-![The books: the settlement board with the latest refunds and settlements](docs/images/app-books.png)
+![The market: ticker, order book priced from ENS, and the trades tape](docs/images/app-market.png)
 
-## FAQ — what exactly is being sold, and to whom
+## FAQ: what exactly is being sold, and to whom
 
 **Onchain data only, or any data?** The reference deployment sells
-**subgraph-queried, onchain-indexed data** — any of The Graph's 15,000+
+**subgraph-queried, onchain-indexed data**: any of The Graph's 15,000+
 subgraphs becomes a sellable dataset with one config entry (`mcp/config/`).
 The mechanism itself generalizes to **any feed that can be timestamped and
-hashed** — prices, sports odds, weather, news: the SLA binds whatever the
+hashed**, prices, sports odds, weather, news: the SLA binds whatever the
 seller can attest. Selling offchain research would need a trustworthy
-freshness attestation for that source, which is the buyer's call to accept —
+freshness attestation for that source, which is the buyer's call to accept;
 the shipped configs only claim what they can attest onchain.
 
 **How is this different from an oracle?** Oracles *push* a feed into a
 contract; you pay to publish. OpenBook is *pull*: a buyer pays per query and
-the seller owes a spec — freshness floor, deliverable hash, deadline — enforced
+the seller owes a spec (freshness floor, deliverable hash, deadline) enforced
 by an escrow that refunds when the spec is missed. The product is not "better
 data access"; it is **recourse** for machine-to-machine purchases.
 
 **Why would anyone pay when they can query raw?** Raw queries give you data;
 they don't give you (1) a counterparty who owes you a verifiable promise,
 (2) a refund that executes without a support ticket, or (3) a payee whose books
-are public. The target buyer is autonomous software and the teams running it —
-trading/execution agents, risk monitors, settlement bots — where one stale
+are public. The target buyer is autonomous software and the teams running it:
+trading/execution agents, risk monitors, settlement bots, where one stale
 answer costs more than the query, and where nobody can open a dispute at 3am.
 
 ## Architecture
@@ -94,7 +102,7 @@ are organs, not stickers:
   CLI: `--hook <addr>` + `OPENBOOK_ESCROW`/`OPENBOOK_HOOK`, a hooked job's
   settlement is enforced onchain, end to end, with the stock binary.
   **Sustainable by construction:** a configurable platform fee (2% on our
-  escrow instance) routes every settlement's cut to the policy-gated treasury —
+  escrow instance) routes every settlement's cut to the policy-gated treasury,
   verified onchain: the settlement receipt splits 0.0020 USDC to the
   PolicyWallet and 0.0980 to the seller ([tx `0xb4fbc894…`](https://testnet.arcscan.app/tx/0xb4fbc8949598c9d940a8152618d891c545ab3be2cca94db9886fca07810c5512)).
 - **The Graph (the product):** `sla-subgraph-mcp`, a generic MCP server with a
@@ -111,7 +119,7 @@ are organs, not stickers:
   pricing, SLA, and payee as text records; buyers hard-fail without resolution
   ("No ENS, no payment"). The `svc.payee` record names the seller wallet the
   page settles to (a Circle wallet; the server re-resolves it and the price from ENS
-  before every job and refuses mismatches), and the venue fee goes to the policy-gated
+  before every job and refuses mismatches), and the protocol fee goes to the policy-gated
   treasury through the escrow's fee split. The agent also runs its **own ENSv2 subname registry**
   (UserRegistry via the VerifiableFactory): a dataset can be its own subname,
   `aave-v3-arbitrum-lending.openbook.eth` prices itself at 0.15 while the parent
@@ -133,27 +141,40 @@ are organs, not stickers:
 ## The app
 
 Open [https://openbook.litai.ca](https://openbook.litai.ca) and you are standing in the
-marketplace. One page, five sections, every figure read live from ENS, the `open-book`
-subgraph and the Arc escrow:
+marketplace. Two pages, every figure read live from ENS, the `open-book` subgraph and the
+Arc escrow:
 
-1. **The refund.** The latest real refund the escrow executed, as a receipt with its
-   ArcScan link, and three live counters (refunds executed, USDC settled, sellers listed).
-2. **Try it, keyless.** Pick a dataset, see the ENS price and the freshness promise in
-   plain words, click **Buy**. A Circle developer-controlled wallet pays on the live escrow
-   (gas sponsored by Circle Gas Station), a second Circle wallet sells, and a stepper shows
-   every transaction as it lands: paid into escrow, data delivered with its block,
-   freshness checked onchain, settled, 98/2 fee split. **Make it fail** runs the same
-   purchase with the floor one block above the delivery: the hook refuses (`SlaNotMet`)
-   and the escrow refunds, in the same click.
-3. **The market.** Both sellers as cards, priced by their own ENS records, with the
-   venue fee read from the escrow. Labeled honestly: two reference sellers we operate.
-4. **The books.** Settled, refunded, venue fees and the treasury balance; a settlement
-   board of the latest jobs (a judge's own runs appear immediately and confirm once the
-   subgraph indexes them); the treasury's onchain refusals.
-5. **How it works.** Arc, The Graph and ENS in plain words, the MCP quickstart, and the
-   console for power users.
+1. **The console, open.** The hero is the console, with a clean tape and the chips under
+   it as the call to action; the paragraph beside it states the problem (no refund, no
+   dispute, nobody to call) and the promise. Purchases run through a Circle
+   developer-controlled wallet (gas sponsored by Circle Gas Station) or the visitor's own
+   connected wallet; after each receipt the chips lead to the next move.
+   Nineteen commands, `help` lists them, and plain English works: anything that is not a
+   command goes to the server model, which picks the command (read-only ones run at once).
+   "get me the odds for Charlotte 49ers vs Western Carolina, max 10 cents" becomes
+   `buy overtime-sports-odds --match "Charlotte 49ers" --max 0.10`, the console asks how fresh
+   the data must be, "under 10 seconds" answers it, and one receipt prints the match and its
+   odds, the floor, fund, submit and the verdict (job 114); "now get me the same data but no older than a tenth of a
+   second" is a real purchase no seller can meet: the freshness window is measured at
+   delivery (data fetched first, floor = chain head minus the window), the delivery lands
+   below the floor and the contract refuses and refunds (job 115: data 3.5 s old, window
+   0.1 s, measured against the clock: Arbitrum's newest block is already over a second old); "show all available data markets" lists the datasets. `--max` caps the spend,
+   `--fresh` turns seconds into the block window the contract enforces.
+2. **The market, its own page** ([openbook.litai.ca/#market](https://openbook.litai.ca/#market)),
+   a dark exchange screen: a ticker strip (24h settled and refunded volume, 30-day refund
+   rate, protocol fees, open jobs, subgraph lag), an order book with one row per dataset
+   (seller ENS name, price per query and freshness window read live from ENS, other
+   sellers' asks, last delivery, settled/refunded counts, a Buy button that runs the
+   console) and a trades tape of the newest jobs. The landing page carries the ticker
+   strip as a teaser.
+3. **Try it, with buttons.** The same purchase as a six-row stepper: pick a dataset, see
+   the ENS price and the freshness promise in plain words, click **Buy**; **Make it fail**
+   runs the same purchase with the floor one block above the delivery: the hook refuses
+   (`SlaNotMet`) and the escrow refunds, in the same click.
+4. **How it works.** Arc, The Graph and ENS in plain words, the MCP quickstart, the
+   system map.
 
-![The hero: the latest refund the escrow executed, with live counters](docs/images/app-hero.png)
+![The hero: the console, with the spoken purchase as the call to action](docs/images/app-hero.png)
 
 **Reliability.** Subgraph Studio rate-limits the public query endpoint per caller, so
 both hosting lanes serve a same-origin cached proxy at `/api/subgraph`
@@ -180,31 +201,43 @@ buyer), **sandbox** (safe re-enactments on the same live contracts).
 | inspect | `ens show` | live `svc.*` storefront records of `openbook.eth` |
 | inspect | `datasets` | the storefront menu: 5 datasets with live ENS prices + SLA windows |
 | inspect | `quote` | ENS-priced quote + SLA floor (live reads, no tx) |
-| inspect | `books` | scoped P&L: totals + rows over our addresses (subgraph) |
+| inspect | `books` | the books: settled, refunded, protocol fees over our jobs, plus the rows (subgraph) |
 | inspect | `jobs` | scoped job table from the subgraph |
 | inspect | `job` | one job's detail: paid → fulfilled → settled/refunded |
 | inspect | `lag` | arc head vs subgraph indexed block (freshness ruler) |
 | inspect | `policy show` | PolicyWallet caps/spend + allowlist, read live from the contract |
 | inspect | `replay` | the six-frame theater for a job (quote/pay/deliver/verdict/money/books) |
-| act | `buy` | fund an ERC-8183 job at the live ENS price (demo key or connected wallet) |
+| act | `buy` | fund an ERC-8183 job at the live ENS price (Circle wallets on the deployed site; demo key or connected wallet locally) |
 | act | `deliver` | capture the gateway payload hash + freshness block and submit it onchain |
 | act | `settle` | attest the delivery, verify + settle onchain, print verdict + fee split |
 | sandbox | `policy refusals` | real `PolicyBlocked` rows from the subgraph (`PER_TX_CAP` / `DAILY_CAP` / `NOT_ALLOWLISTED`) |
 | sandbox | `policy try-overspend` | simulated cap check: mirror of `checkWithdrawal` over live contract caps, no tx sent |
-| sandbox | `sandbox stale` | floor pinned one block above the delivery so `complete()` reverts `SlaNotMet`; arm the refund |
+| sandbox | `sandbox stale [dataset]` | floor pinned one block above the delivery so `complete()` reverts `SlaNotMet`; on the deployed site the attester refunds in the same step |
 | sandbox | `sandbox claim` | execute `claimRefund` for real after the deadline (live countdown) |
+
+**Buy with your own wallet.** "Connect wallet" in the top bar connects a browser wallet on
+Arc testnet (a dismissable banner links the faucet for testnet USDC). Once connected, the
+console's `buy` runs the marketplace purchase from that wallet: the wallet opens the job
+naming the ENS payee (the seller's Circle wallet) as provider and the hook's attester as
+evaluator, the seller quotes it through `/api/circle/budget` (setBudget, gas sponsored),
+then the wallet approves and funds. Three signatures, gas in Arc's native USDC. `deliver`
+then has the seller's wallet submit and `settle` has the attester pay or refund, exactly
+as for a keyless purchase. Verified on 2026-09-13 with job 105 (an outside wallet as buyer,
+settled APPROVE).
 
 **Who signs what (no key in the browser).** The Buy and Make it fail buttons sign
 nothing: the buyer is a Circle developer-controlled SCA wallet on Arc testnet and the seller
 is a second one, both driven from the page's server routes (`/api/circle/job`,
-`/api/circle/submit`, see `app/worker/circle.ts`) through Circle's API with a fresh entity
+`/api/circle/submit`, `/api/circle/budget`, see `app/worker/circle.ts`) through Circle's API with a fresh entity
 secret ciphertext per request, and their gas is paid by Circle Gas Station (the Arc testnet
 policy). The buyer opens and funds the job, the seller sets the budget and submits the
 deliverable the attester signed, so every page purchase pays a different party: the
 dataset's ENS `svc.payee` names the seller wallet. The buyer holds testnet USDC as play
 money; `scripts/circle/recycle.ts` moves the seller's earnings back to it. The console's
-act and sandbox commands still sign locally with `VITE_DEMO_BUYER_KEY` (local dev only; the
-production bundle carries no key). The SLA hook's attester is a third key that never reaches the browser, and it
+act and sandbox commands (`buy`, `deliver`, `settle`, `sandbox stale`) take the same Circle
+path on the deployed site, so the whole purchase can be driven from the console with no key;
+they sign locally with `VITE_DEMO_BUYER_KEY` only in local dev (the production bundle carries
+no key). The SLA hook's attester is a third key that never reaches the browser, and it
 is the evaluator of every page purchase: `/api/deliver` signs what it observed (EIP-191,
 the page recovers the signer and checks it against the hook's `attester()`), and
 `/api/attest` verifies the job, its floor and the submitted deliverable onchain, posts the
@@ -237,7 +270,7 @@ storefront and priced by their own text records: `openbook.eth` (0.10 USDC/query
 0.15 for the `aave-v3-arbitrum-lending` subname) and `alpha.openbook.eth`
 ([`sellers/alpha.json`](sellers/alpha.json), minted at 0.12 and repriced to 0.13 USDC/query by its own key, payout to
 `0xe09C8F90931E97d0aEE998885b306DDF08CE08Cc`). Both sell through the shared market escrow
-`0x967e005154D0F62C33Eac8E2F44b44d4C4C07Dd5`, whose 2 percent venue fee (`platformFeeBP`)
+`0x967e005154D0F62C33Eac8E2F44b44d4C4C07Dd5`, whose 2 percent protocol fee (`platformFeeBP`)
 routes every settlement's cut to the policy-gated treasury. A chosen-seller settlement is
 onchain: job 45 was picked by price (`--prefer cheap`), and the receipt split
 [0.1176 USDC to alpha and 0.0024 USDC to the PolicyWallet (tx 0xd122ade9…6466f0d)](https://testnet.arcscan.app/tx/0xd122ade9f2b057ea55a9d9e5163f57cf9e440f0bf8ac35401737832fa6646f0d).
@@ -254,14 +287,14 @@ defaulting to anything.
 - `contracts/`: PolicyWallet.sol (policy treasury) + SlaHook.sol (onchain SLA adjudication) + tests
 - `agent/`: agent loop, ERC-8183 settlement spine, buyer CLI
 - `mcp/`: `sla-subgraph-mcp` (the Graph tooling entry) + `SKILL.md`
-- `subgraph/`: the P&L subgraph source (deployed to Studio as `open-book`, Arc testnet)
-- `app/`: the product page (Vite + React): hero refund, keyless live purchase, market, books, console
+- `subgraph/`: the books subgraph (settlements, refunds, fees, a day-by-day P&L; deployed to Studio as `open-book`, Arc testnet)
+- `app/`: the product page (Vite + React): the console as the hero, an exchange-style market, books, a keyless stepper
 - `scripts/`: ENS setup, spikes, stale-replay proxy
 - `docs/`: architecture, design decisions, demo script, submission copy
 
 ## Quickstart
 
-**Judge the live agent keyless in ~60 seconds** (quote + P&L need no keys, since the ENS
+**Judge it keyless in ~60 seconds** (quote + books need no keys, since the ENS
 records and the Studio endpoint are public):
 
 ```bash
@@ -340,20 +373,19 @@ fresh clone, not inferred from the code.
 - The escrow and identity contracts are Circle's ERC-8183 / ERC-8004 **reference
   deployments**; the custom work is `PolicyWallet.sol`, `SlaHook.sol`, the MCP seller, and
   the ENSv2 storefront.
-- **Circle Wallets and Gas Station, not the Agent Stack CLI or Nanopayments.** The page's
-  buyer and seller are Circle developer-controlled wallets with sponsored gas (verified live:
-  the seller wallet held no USDC when it first submitted, and every buyer and seller
+- **The page's purchases use Circle Wallets and Gas Station; the x402 lane is separate.** The
+  page's buyer and seller are Circle developer-controlled wallets with sponsored gas (verified
+  live: the seller wallet held no USDC when it first submitted, and every buyer and seller
   operation goes through the EntryPoint with Circle's SponsorPaymaster paying, e.g. job 86
-  [submit](https://testnet.arcscan.app/tx/0x66135a8c6ec289d165023a16bb86bd53d478aa3a6c95f888a939bea2b46b6638)). Per-query spend goes through
-  the ERC-8183 escrow, not x402, because the product is the refund, which x402 cannot
-  express. An x402 lane for agents that want no recourse, and a Circle Agent Wallet buyer
-  through the Agent Stack CLI, are the next steps in RUNBOOK.md.
+  [submit](https://testnet.arcscan.app/tx/0x66135a8c6ec289d165023a16bb86bd53d478aa3a6c95f888a939bea2b46b6638)). Per-query spend with
+  recourse goes through the ERC-8183 escrow because x402 cannot express a refund; the x402
+  lane above sells the same delivery without recourse, paid from a Circle Agent Wallet.
 - **The hook's freshness fact is the operator's claim.** The attester signs the block it
-  observed and is also the job's evaluator, so the venue's key is the trust anchor. The
+  observed and is also the job's evaluator, so the protocol's key is the trust anchor. The
   hook makes paying without an attestation above the floor impossible, and a buyer's worst
   case is a refund at the deadline (`claimRefund`), never a lost payment. An attester
-  the venue does not control (a Gateway-signed `_meta`, or 2-of-2) is the next step.
+  the protocol does not control (a Gateway-signed `_meta`, or 2-of-2) is the next step.
 
 ## Status
 
-Submission-ready build for ETHOnline 2026 (Sep 4–16); deployed pieces live on Arc testnet and Sepolia.
+Submitted to ETHOnline 2026 (Sep 4–16). Deployed pieces live on Arc testnet and ENSv2 Sepolia; the demo video is linked at the top.

@@ -10,17 +10,20 @@
  * subgraph's PolicyConfig entity is empty on our instance and is never used
  * (controller ruling, carry-ins).
  */
-import { marketJobs } from "../../data/feed";
+import { marketJobs, totals as marketTotals } from "../../data/feed";
+import { platformFee } from "../../data/escrow";
+import { usdcTrim } from "./act";
 import { CONFIG, type DatasetConfig } from "../../config";
 import { env } from "../../env";
 import { circleStatus, hasGatewayAccess } from "../../data/api";
 import { ADDR } from "../../data/addresses";
 import { demoAddress } from "../../data/chain";
 import { readPolicy } from "../../data/policy";
-import { fetchJobEventsResilient, fetchJobsResilient, fetchLagResilient, scopedTotals, type JobEventView, type Resilient } from "../../data/subgraph";
+import { fetchJobEventsResilient, fetchJobsResilient, fetchLagResilient, type JobEventView, type Resilient } from "../../data/subgraph";
 import type { JobView } from "../../data/types";
 import { cachedAsOfLabel } from "../../data/cache";
 import { truncateHash, usdc6 } from "../../format";
+import { blocksToDuration, datasetTitle } from "../../copy/plain";
 import { createEnsTextReader, parsePriceToAmount6dec, parseSlaRecord } from "../../../../mcp/src/ens";
 import { createDirectoryClient } from "../../../../mcp/src/directory";
 import { namehash, parseAbi } from "viem";
@@ -337,15 +340,17 @@ function priceCell(dataset: DatasetConfig, probe: { value: string | null; failed
 }
 
 /** Live ENS SLA maxBlockLag cell: parse failures and unset records are `✗ …`. */
-function slaCell(probe: { value: string | null; failed?: string }): string {
+/** "within about 13 s" from the seller's promise, in the buyer's units. */
+function freshnessCell(probe: { value: string | null; failed?: string }, chain: DatasetConfig["chain"]): string {
   if (probe.failed) return `✗ ${probe.failed}`;
   if (probe.value === null) return "✗ svc.sla unset";
   try {
-    return String(parseSlaRecord(probe.value).maxBlockLag);
+    return blocksToDuration(parseSlaRecord(probe.value).maxBlockLag, chain).replace(/^about /, "within ~");
   } catch (error) {
     return `✗ invalid: ${reason(error)}`;
   }
 }
+
 
 /* ------------------------------------------------------------- datasets */
 
@@ -374,19 +379,18 @@ const datasetsCommand: Command = {
         return { dataset, price: firstNonNull(subPrice, rootPrice), sla: firstNonNull(subSla, rootSla) };
       }),
     );
+    // a buyer's view: what it is, what it costs, how fresh the seller promises it
     const rows = probes.map(({ dataset, price, sla }) => ({
-      id: dataset.id,
-      schema: dataset.schema,
+      dataset: datasetTitle(dataset.id),
       price: priceCell(dataset, price),
-      maxBlockLag: slaCell(sla),
-      chain: dataset.chain,
+      freshness: freshnessCell(sla, dataset.chain),
     }));
     return {
       render: "table",
       data: {
-        columns: ["id", "schema", "price", "maxBlockLag", "chain"],
+        columns: ["dataset", "price", "freshness"],
         rows,
-        summary: `${CONFIG.datasets.length} datasets · prices and SLA windows are LIVE ENS reads (subname over ${CONFIG.ens}), same resolution as quote <id>`,
+        summary: `${CONFIG.datasets.length} datasets for sale · prices and freshness promises are live ENS reads from the sellers' names · say what you want, or quote <name>`,
       },
     };
   },
@@ -486,9 +490,9 @@ const quoteCommand: Command = {
 const booksCommand: Command = {
   name: "books",
   args: "[--days n]",
-  help: "scoped P&L: totals + rows over OUR_ADDRESSES (subgraph)",
+  help: "the books: settled, refunded and protocol fees over our jobs (subgraph), plus the rows",
   kind: "inspect",
-  run: async (_ctx, argv) => {
+  run: async (ctx, argv) => {
     const days = parseDays(argv);
     if ("error" in days) return { render: "text", data: days.error };
     let out: Resilient<JobView[]>;
@@ -499,7 +503,15 @@ const booksCommand: Command = {
     }
     // the same scope as the page's books: jobs on the market escrow, funded ones only
     const jobs = marketJobs(out.value);
-    const totals = scopedTotals(jobs);
+    // the fee rate is the escrow's own (platformFeeBP), read live; the page's Books use the same
+    let feeBP: number | null = null;
+    try {
+      feeBP = (await platformFee(ctx.publicClient)).feeBP;
+    } catch {
+      feeBP = null;
+    }
+    const t = marketTotals(jobs, feeBP ?? 0);
+    const feeLine = feeBP === null ? "protocol fees n/a (escrow unreachable)" : `protocol fees ${usdcTrim(t.feesUsdc)} USDC (${(feeBP / 100).toFixed(0)}% of settled)`;
     const cutoff = Math.floor(Date.now() / 1000) - days.days * 86_400;
     const rows = jobs
       .filter((j) => j.timestamp === 0 || j.timestamp >= cutoff)
@@ -516,7 +528,7 @@ const booksCommand: Command = {
       data: {
         columns: JOB_COLUMNS,
         rows,
-        summary: `net ${usdc6(totals.net)} USDC · revenue ${usdc6(totals.revenue)} · refunds ${usdc6(totals.refunds)} · ${jobs.length} jobs, ${rows.length} in the ${days.days}d window${cachedSuffix(out)}`,
+        summary: `settled ${usdc6(t.settledUsdc)} USDC (${t.settledCount}) · refunded ${usdc6(t.refundedUsdc)} USDC (${t.refundedCount}) · ${feeLine} · ${jobs.length} jobs, ${rows.length} in the ${days.days}d window${cachedSuffix(out)}`,
       },
     };
   },
@@ -616,7 +628,7 @@ const jobCommand: Command = {
     }
     return {
       render: "kv",
-      data: { rows, note: `replay ${id} opens the frame-by-frame theater; job 185853 is the cited refund${cachedSuffix(events)}` },
+      data: { rows, note: `replay ${id} opens the frame-by-frame theater${ev.refunded ? " · the refund is the hero card's kind of receipt: the contract refused, the escrow returned the money" : ""}${cachedSuffix(events)}` },
     };
   },
 };

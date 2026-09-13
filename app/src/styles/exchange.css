@@ -1,0 +1,326 @@
+/* The market as an exchange screen: ticker strip, order book, trades tape.
+   Dense monospace, numbers right-aligned, the two meaning colours only. */
+
+.xch__caption {
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+/* ---- ticker strip ------------------------------------------------------ */
+
+.xch__ticker {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--sheet);
+}
+
+.xch__ticker > * {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 140px;
+  min-width: 0;
+  padding: 10px 14px;
+  border-right: 1px solid var(--line);
+}
+
+.xch__ticker > *:last-child {
+  border-right: 0;
+}
+
+.xch__k {
+  font-family: var(--mono);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.xch__v {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.xch__v small {
+  font-size: 13px;
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+/* ---- tables ------------------------------------------------------------ */
+
+.xch {
+  min-width: 0;
+}
+
+.xch__scroll {
+  position: relative; /* contains the visually hidden captions: absolute children never widen the page */
+  overflow-x: auto;
+  max-width: 100%;
+  margin-top: 16px;
+}
+
+.xch__book,
+.xch__trades {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.xch__book th,
+.xch__trades th {
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: left;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line-strong);
+  white-space: nowrap;
+}
+
+.xch__book td,
+.xch__trades td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+/* numbers, times and hashes never wrap; names and windows may */
+.xch__book .num,
+.xch__trades .num,
+.xch__trades td:first-child,
+.xch__trades td:last-child,
+.xch__book td:last-child {
+  white-space: nowrap;
+}
+
+.xch__book .num,
+.xch__trades .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.xch__book tbody tr:hover,
+.xch__trades tbody tr:hover {
+  background: var(--paper);
+}
+
+.xch__book a,
+.xch__trades a {
+  color: var(--ink);
+  text-decoration-color: var(--line-strong);
+}
+
+.xch__book a:hover,
+.xch__trades a:hover {
+  color: var(--accent);
+}
+
+.xch__book .is-settled,
+.xch__trades .is-settled,
+.xch .is-settled {
+  color: var(--settled);
+}
+
+.xch__book .is-refunded,
+.xch__trades .is-refunded,
+.xch .is-refunded {
+  color: var(--refunded);
+}
+
+.xch__book .is-open,
+.xch__trades .is-open,
+.xch .is-open {
+  color: var(--stale);
+}
+
+.xch__muted {
+  color: var(--muted);
+}
+
+/* ---- buy button -------------------------------------------------------- */
+
+.xch__buy {
+  background: var(--ink);
+  color: #fff;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 4px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.xch__buy:hover {
+  background: var(--accent);
+}
+
+.xch__buy:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- value flash ------------------------------------------------------- */
+
+.xch__flash {
+  display: inline-block;
+  border-radius: 2px;
+  animation: xch-flash 900ms ease-out;
+}
+
+@keyframes xch-flash {
+  from {
+    background: var(--flash);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xch__flash {
+    animation: none;
+  }
+}
+
+/* ---- below the book: tape + fee note ----------------------------------- */
+
+.xch__below {
+  display: grid;
+  grid-template-columns: 1fr;
+  margin-top: 28px;
+}
+
+.xch__below > * {
+  min-width: 0;
+}
+
+.xch__h3 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.xch__tape .xch__scroll {
+  margin-top: 8px;
+}
+
+.xch__fee {
+  padding: 16px 20px;
+  border-radius: var(--radius-sm);
+  background: var(--settled-bg);
+  color: var(--settled);
+}
+
+.xch__fee p {
+  margin: 0;
+}
+
+.xch__fee p + p {
+  margin-top: 10px;
+}
+
+.xch__fee a {
+  color: inherit;
+}
+
+/* ---- visually hidden --------------------------------------------------- */
+
+.xch-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 860px) {
+  .xch__below {
+    grid-template-columns: 1fr;
+  }
+}
+
+.xch__also {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.xch__nw {
+  white-space: nowrap;
+}
+
+/* ---- the market page: a dark exchange screen ---------------------------- */
+
+.market-route {
+  --paper: #0b100e;
+  --sheet: var(--board-2);
+  --ink: var(--board-text);
+  --ink-2: var(--board-text);
+  --muted: var(--board-muted);
+  --line: #253230;
+  --line-strong: #3a4a46;
+  --settled-bg: #10322a;
+  --refunded-bg: #3a1a16;
+  --stale-bg: #3a2f12;
+  --accent-soft: #16244a;
+  --settled: #2fbf8a;
+  --refunded: #e0533f;
+  --stale: #d9a441;
+  --accent: #8db0ff;
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  padding-top: 28px;
+}
+
+body:has(.market-route) { background: #0b100e; }
+
+.market-route .section { padding-top: 40px; }
+.market-route a { color: var(--ink); }
+.market-route .xch__buy { background: var(--board-text); color: var(--board); }
+.market-route .xch__buy:hover { background: #5b8cff; color: #fff; }
+.market-route .xch__fee { color: #8fd9b8; }
+.market-route .xch__ticker { background: var(--sheet); }
+
+.xch__open {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 18px 0 6px;
+}
+
+.xch__k--hint { cursor: help; text-decoration: underline dotted var(--line-strong); text-underline-offset: 3px; }
+.xch__k--hint:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.xch__caption { max-width: 72ch; }
+.market-route .hero__top { margin-bottom: 8px; }
+.market-route .hero__brand, .market-route .hero__nav a { color: var(--ink); }
+.hero__nav a[aria-current="page"] { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
+.hero__brand { text-decoration: none; }
+.market-route .hero__mark, .map-route .hero__mark { background: var(--board-text); color: var(--board); }
+.map-route .hero__top { margin-bottom: 16px; }

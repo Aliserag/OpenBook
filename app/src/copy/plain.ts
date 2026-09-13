@@ -28,8 +28,8 @@ export function stalenessLabel(metaBlock: number, minBlock: number, _chain: Data
 }
 
 const TITLES: Record<string, string> = {
-  "aave-v3-arbitrum-lending": "Aave V3 lending on Arbitrum",
-  "uniswap-v3-arbitrum-dex": "Uniswap V3 pools on Arbitrum",
+  "aave-v3-arbitrum-lending": "Aave V3 lending markets",
+  "uniswap-v3-arbitrum-dex": "Uniswap V3 pool prices",
   "opensea-nft-trades": "OpenSea NFT trades",
   "ens-registrations": "ENS name registrations",
   "overtime-sports-odds": "Overtime sports odds",

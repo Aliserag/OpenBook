@@ -13,7 +13,7 @@
  *   3. try      the dataset picker has 5 datasets, the ENS-priced quote line
  *               renders, both buttons are enabled (no purchase is executed)
  *   4. market   two seller cards from live ENS (openbook.eth + a subname);
- *               the venue line reads the live fee
+ *               the protocol-fee line reads the live fee
  *   5. books    the four figures resolve, the board has rows (or a truthful
  *               state), the refusals block renders
  *   6. console  ⌘K opens the dock; help lists all 18 commands; quote renders
@@ -171,44 +171,22 @@ async function audit(url) {
     else fail("1.shell headline renders verbatim", `got "${h1}"`);
     const shell = await page.evaluate(() => ({
       nav: [...document.querySelectorAll(".hero__nav a")].map((a) => a.textContent.trim()),
-      buttons: [...document.querySelectorAll(".hero__actions button")].map((b) => b.textContent.trim()),
+      console: !!document.querySelector(".hero .console--inline .console__input"),
+      chips: [...document.querySelectorAll(".hero .console--inline .console__ask-chip")].length,
     }));
-    if (shell.nav.length === 4 && shell.buttons.length === 2) pass("1.shell nav + hero buttons", `${shell.nav.join("/")} · ${shell.buttons.join(" · ")}`);
-    else fail("1.shell nav + hero buttons", JSON.stringify(shell));
+    if (shell.nav.length === 4 && shell.console && shell.chips >= 4) pass("1.shell nav + hero console", `${shell.nav.join("/")} · console inline · ${shell.chips} chips`);
+    else fail("1.shell nav + hero console", JSON.stringify(shell));
 
-    /* 2 · hero receipt + counters */
-    try {
-      const receipt = await waitFor(
-        page,
-        () => {
-          const normP = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
-          const card = document.querySelector(".receipt");
-          if (!card) return null;
-          const text = normP(card.textContent);
-          if (/Reading the escrow/i.test(text)) return null;
-          return { text, badge: normP(card.querySelector(".badge")?.textContent ?? ""), empty: card.classList.contains("receipt--empty") };
-        },
-        { timeout: 90000, label: "hero receipt to settle" },
-      );
-      if (!receipt.empty && receipt.badge === "Refunded" && /job\s*\d+/i.test(receipt.text)) {
-        pass("2.hero latest refund renders", receipt.text.slice(0, 110));
-      } else if (receipt.empty && isAmbient(receipt.text)) {
-        skip("2.hero latest refund renders", `truthful degraded: ${receipt.text.slice(0, 120)}`);
-      } else {
-        fail("2.hero latest refund renders", receipt.text.slice(0, 160));
-      }
-    } catch (error) {
-      fail("2.hero latest refund renders", error.message.slice(0, 160));
-    }
-    const counters = await page.evaluate(() =>
-      [...document.querySelectorAll(".counters .figure strong")].map((s) => s.textContent.trim()),
-    );
-    if (counters.length === 3 && counters.every((c) => c !== "…")) {
-      if (counters.some((c) => c === "?")) skip("2.hero counters resolve", `degraded: ${counters.join(" · ")}`);
-      else pass("2.hero counters resolve", counters.join(" · "));
-    } else {
-      fail("2.hero counters resolve", counters.join(" · ") || "no counters");
-    }
+    /* 2 · hero console: clean tape + the lede */
+    const tape = await page.evaluate(() => ({
+      empty: !!document.querySelector(".hero .console--inline .console__empty"),
+      receipts: document.querySelectorAll(".hero .console--inline .console__entry").length,
+    }));
+    if (tape.empty && tape.receipts === 0) pass("2.hero console starts clean", "empty tape, chips as the call to action");
+    else fail("2.hero console starts clean", JSON.stringify(tape));
+    const lede = await page.evaluate(() => String(document.querySelector(".hero .lede")?.textContent ?? "").replace(/\s+/g, " ").trim());
+    if (/^The data marketplace for AI agents\./.test(lede) && !/on Arc\./.test(lede.slice(0, 60))) pass("2.hero lede sells the problem", lede.slice(0, 80) + "…");
+    else fail("2.hero lede sells the problem", lede.slice(0, 120));
 
     /* 3 · try it */
     try {
@@ -236,16 +214,19 @@ async function audit(url) {
       fail("3.try section", error.message.slice(0, 160));
     }
 
-    /* 4 · market */
+    /* 4 · market (its own page at #market) */
+    await page.goto(url.replace(/#.*$/, "") + "#market", { waitUntil: "domcontentloaded", timeout: 45000 });
+    await sleep(4000);
     try {
       const market = await waitFor(
         page,
         () => {
           const normP = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
-          const sellers = [...document.querySelectorAll(".seller h3")].map((h) => normP(h.textContent));
+          // the order book lists one row per dataset; the seller column carries the ENS names
+          const sellers = [...new Set([...document.querySelectorAll(".xch__book tbody tr td:nth-child(2) a")].map((h) => normP(h.textContent)))];
           const note = normP(document.querySelector("#market > p.small")?.textContent ?? "");
           if (sellers.length === 0 && !/could not be read/i.test(note)) return null;
-          return { sellers, note, venue: normP(document.querySelector(".venue")?.textContent ?? "") };
+          return { sellers, note, venue: normP(document.querySelector(".xch__k--hint")?.getAttribute("title") ?? "") };
         },
         { timeout: 90000, label: "market sellers" },
       );
@@ -254,41 +235,39 @@ async function audit(url) {
       if (parent && sub) pass("4.market two sellers from live ENS", market.sellers.join(", "));
       else if (isAmbient(market.note)) skip("4.market two sellers from live ENS", market.note.slice(0, 120));
       else fail("4.market two sellers from live ENS", `${market.sellers.join(", ") || "none"} · ${market.note}`);
-      if (/takes 2% of every settlement/.test(market.venue)) pass("4.market venue fee line", market.venue.slice(0, 90));
-      else fail("4.market venue fee line", market.venue.slice(0, 120));
+      if (/takes 2% of every settlement/.test(market.venue)) pass("4.market protocol fee tooltip", market.venue.slice(0, 90));
+      else fail("4.market protocol fee tooltip", market.venue.slice(0, 120));
     } catch (error) {
       fail("4.market section", error.message.slice(0, 160));
     }
 
-    /* 5 · books */
+    /* 5 · market page: tape + ticker */
     try {
-      const books = await waitFor(
+      const mk = await waitFor(
         page,
         () => {
-          const normP = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
-          const figures = [...document.querySelectorAll(".books__figures .figure strong")].map((s) => s.textContent.trim());
-          if (figures.some((f) => f === "…")) return null;
-          const rows = document.querySelectorAll(".board__row").length;
-          const empty = normP(document.querySelector(".board__empty")?.textContent ?? "");
-          const state = normP(document.querySelector(".books__state")?.textContent ?? "");
-          const refusals = normP(document.querySelector(".refusals h3")?.textContent ?? "");
-          return { figures, rows, empty, state, refusals };
+          const rows = document.querySelectorAll(".xch__trades tbody tr td:nth-child(2)").length;
+          const ticker = [...document.querySelectorAll(".market-route .xch__ticker [role=listitem]")].length;
+          const vals = [...document.querySelectorAll(".market-route .xch__v")].map((v) => v.textContent.trim());
+          if (vals.some((v) => v === "…")) return null;
+          return { rows, ticker, vals };
         },
-        { timeout: 90000, label: "books figures" },
+        { timeout: 90000, label: "market ticker" },
       );
-      if (books.figures.length === 4 && !books.figures.includes("?")) pass("5.books four figures resolve", books.figures.join(" · "));
-      else if (isAmbient(books.state)) skip("5.books four figures resolve", books.state.slice(0, 120));
-      else fail("5.books four figures resolve", `${books.figures.join(" · ")} · ${books.state}`);
-      if (books.rows >= 1) pass("5.books board has rows", `${books.rows} rows · ${books.state.slice(0, 60)}`);
-      else if (isAmbient(books.empty) || isAmbient(books.state)) skip("5.books board has rows", books.empty || books.state);
-      else fail("5.books board has rows", books.empty || "no rows and no copy");
-      if (/^The treasury/.test(books.refusals)) pass("5.books refusals block", books.refusals);
-      else fail("5.books refusals block", books.refusals || "missing");
+      if (mk.ticker === 6 && !mk.vals.includes("?")) pass("5.market ticker resolves", mk.vals.join(" · "));
+      else fail("5.market ticker resolves", JSON.stringify(mk));
+      if (mk.rows >= 1) pass("5.market trades tape has rows", `${mk.rows} rows`);
+      else fail("5.market trades tape has rows", "no rows");
+      const nav = await page.evaluate(() => [...document.querySelectorAll(".market-route .hero__nav a")].map((a) => a.textContent.trim()));
+      if (nav.length === 4) pass("5.market page top bar", nav.join("/"));
+      else fail("5.market page top bar", nav.join("/") || "missing");
     } catch (error) {
-      fail("5.books section", error.message.slice(0, 160));
+      fail("5.market section", error.message.slice(0, 160));
     }
 
-    /* 6 · console */
+    /* 6 · console (back on the landing page) */
+    await page.goto(url.replace(/#.*$/, ""), { waitUntil: "domcontentloaded", timeout: 45000 });
+    await sleep(4000);
     try {
       await openDock(page);
       pass("6.console ⌘K opens the dock", ".console present");

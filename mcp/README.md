@@ -97,7 +97,7 @@ attestation signature from the operator key.
 {
   "name": "my-store",
   "ens": "openbook.eth",                    // ENSv2 name (Sepolia) with svc.* records
-  "escrow": "0x967e005154D0F62C33Eac8E2F44b44d4C4C07Dd5", // our market escrow instance (2% venue fee)
+  "escrow": "0x967e005154D0F62C33Eac8E2F44b44d4C4C07Dd5", // our market escrow instance (2% protocol fee)
                                             // override at boot with OPENBOOK_ESCROW
   "payee": "0x0000…0000",                   // set to your PolicyWallet; get_quote
                                             // uses the live svc.payee record anyway

@@ -17,8 +17,8 @@ describe("plain copy", () => {
     expect(stalenessLabel(0, 504_000_000, "arbitrum")).toBe("504,000,000 blocks below the freshness floor");
   });
   test("dataset titles", () => {
-    expect(datasetTitle("aave-v3-arbitrum-lending")).toBe("Aave V3 lending on Arbitrum");
-    expect(datasetTitle("uniswap-v3-arbitrum-dex")).toBe("Uniswap V3 pools on Arbitrum");
+    expect(datasetTitle("aave-v3-arbitrum-lending")).toBe("Aave V3 lending markets");
+    expect(datasetTitle("uniswap-v3-arbitrum-dex")).toBe("Uniswap V3 pool prices");
     expect(datasetTitle("opensea-nft-trades")).toBe("OpenSea NFT trades");
     expect(datasetTitle("ens-registrations")).toBe("ENS name registrations");
     expect(datasetTitle("overtime-sports-odds")).toBe("Overtime sports odds");

@@ -15,7 +15,7 @@ export function Builders({ onConsole, onBuy }: { onConsole(): void; onBuy(): voi
           <p className="small">
             Payments sit in an escrow with the freshness promise written into the job. A small contract we wrote
             checks the delivered block against that promise before any payout, so stale data cannot be paid. Gas
-            is USDC. The venue's 2% goes to a treasury with onchain spending limits. (Escrow: Circle's ERC-8183
+            is USDC. The 2% protocol fee goes to a treasury with onchain spending limits. (Escrow: Circle's ERC-8183
             reference; the check: our SlaHook.)
           </p>
         </article>

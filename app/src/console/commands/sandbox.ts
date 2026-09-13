@@ -24,9 +24,9 @@
  * re-exported here — the T9 surfaces consume it, they do not re-implement it.
  */
 import { keccak256, toBytes, type TransactionReceipt } from "viem";
-import { CONFIG, defaultQueryFor } from "../../config";
+import { CONFIG, defaultQueryFor, type DatasetConfig } from "../../config";
 import { env } from "../../env";
-import { attestViaApi, deliverViaApi, hasGatewayAccess } from "../../data/api";
+import { attestViaApi, circleCreateJob, circleSubmit, deliverViaApi, hasGatewayAccess } from "../../data/api";
 import { ensureArcChain } from "../../arc";
 import { ADDR } from "../../data/addresses";
 import { checkWithdrawal, readPolicy, simulateOverspend } from "../../data/policy";
@@ -43,7 +43,7 @@ import {
   type Sla,
 } from "../../../../agent/escrow";
 import { reasonHash } from "../../../../mcp/src/escrow";
-import { register, type Command, type KvRow } from "../registry";
+import { register, type Command, type CommandResult, type KvRow } from "../registry";
 import {
   classifyRevert,
   clearActJobIfClaimed,
@@ -246,11 +246,88 @@ function parseDeadline(argv: string[]): { seconds: number } | { error: string } 
   return { seconds };
 }
 
+
+/**
+ * The stale demo through Circle wallets: the buyer wallet funds a job whose
+ * floor sits one block above the delivered proof, the seller wallet submits,
+ * and the attester (this job's evaluator) posts the proof and, seeing
+ * SlaNotMet, refunds the buyer with reject() in the same request. The refund
+ * is executed, not staged: nothing is left to claim.
+ */
+async function staleViaCircle(
+  ctx: Parameters<Command["run"]>[0],
+  p: { dataset: DatasetConfig; quote: DatasetQuote; sla: Sla; payloadHash: `0x${string}`; metaBlock: number; proof: string; rows: KvRow[] },
+): Promise<CommandResult> {
+  const { dataset, quote, sla, payloadHash, metaBlock, proof, rows } = p;
+  let jobId: bigint;
+  try {
+    const job = await circleCreateJob({ datasetId: dataset.id, minBlock: sla.minBlock, schemaHash: sla.schemaHash, maxLatencyMs: sla.maxLatencyMs, amount: String(quote.amountUsdc) });
+    jobId = BigInt(job.jobId);
+    rows.push(["job", job.jobId]);
+    rows.push(["fund", `${job.txs.fund} · Circle buyer wallet, gas sponsored`]);
+  } catch (error) {
+    return { render: "kv", data: { rows: [...rows, ["fund", `✗ ${formatSendError(error)}`]] } };
+  }
+  try {
+    const tx = await circleSubmit({ jobId: jobId.toString(), deliverable: payloadHash, metaBlock, proof });
+    rows.push(["submit", `${tx} · seller's Circle wallet (job → Submitted)`]);
+  } catch (error) {
+    return { render: "kv", data: { rows: [...rows, ["submit", `✗ ${formatSendError(error)}`]] } };
+  }
+  let attested: Awaited<ReturnType<typeof attestViaApi>>;
+  try {
+    attested = await attestViaApi({ jobId: jobId.toString(), deliverable: payloadHash, metaBlock, minBlock: sla.minBlock, proof });
+    rows.push(["attest", `ok · posted metaBlock ${metaBlock.toLocaleString("en-US")}, floor ${sla.minBlock.toLocaleString("en-US")}`]);
+  } catch (error) {
+    return { render: "kv", data: { rows: [...rows, ["attest", `✗ ${formatSendError(error)}`]] } };
+  }
+  const settle = attested.settle;
+  // the hook's revert (SlaNotMet(attested, floor)) is the evidence; the reject reason string is the fallback
+  const evidence = settle?.verdict === "REJECT" ? (settle.refusal ?? settle.reason ?? "SlaNotMet") : null;
+  if (settle === undefined) {
+    rows.push(["refusal", "✗ the attester posted the proof but did not settle · run `status`, then `sandbox claim` after the deadline"]);
+  } else if (settle.verdict === "REJECT") {
+    rows.push(["refusal", `complete() refused with ${evidence} · reject() ${settle.txHash} · ${usdc6(quote.amountUsdc)} USDC back to the buyer, in full, no fee`]);
+  } else {
+    rows.push(["refusal", `✗ unexpected: the delivery cleared the floor (settled, tx ${truncateHash(settle.txHash)})`]);
+  }
+  let deadline = 0n;
+  try {
+    deadline = (await getJob(ctx.publicClient, jobId)).expiredAt;
+  } catch {
+    deadline = 0n;
+  }
+  const job: ActJob = {
+    datasetId: dataset.id,
+    jobId: String(jobId),
+    minBlock: sla.minBlock,
+    amountUsdc: quote.amountUsdc,
+    deadline,
+    payloadHash,
+    metaBlock,
+    proof,
+    createdAt: Math.floor(Date.now() / 1000),
+    ...(settle !== undefined ? { outcome: settle.verdict === "REJECT" ? ("refunded" as const) : ("settled" as const), txHash: settle.txHash } : {}),
+  };
+  setActJob(job);
+  setSandboxState({ job, evidence });
+  return {
+    render: "kv",
+    data: {
+      rows,
+      note:
+        settle?.verdict === "REJECT"
+          ? "the floor was STAGED one block above the delivered proof, the same code path a real miss takes; the hook's SlaNotMet check refused complete() and the attester, as evaluator, refunded the buyer in the same step · nothing left to claim"
+          : "the floor was STAGED one block above the delivered proof; the refund did not execute in this request, funds stay in escrow until the deadline (sandbox claim)",
+    },
+  };
+}
+
 const staleCommand: Command = {
   name: "sandbox stale",
-  args: "[--deadline <secs>]",
+  args: "[dataset] [--deadline <secs>]",
   help:
-    "STAGED refusal for the demo: the SLA floor is written one block above the delivered proof so this job can never clear it (the hook's SlaNotMet check itself is real · the floor is ours; the same code path a real stale miss takes). Attest as the hook ATTESTER (role-play, spec §5.3b), capture the SlaNotMet revert from a simulated complete() as evidence, then arm the refund claim",
+    "STAGED refusal for the demo: the SLA floor is written one block above the delivered proof so this job can never clear it (the hook's SlaNotMet check itself is real · the floor is ours; the same code path a real stale miss takes). With Circle wallets (deployed) the attester refunds in the same step; with a local key, capture the SlaNotMet revert from a simulated complete() as evidence, then arm the refund claim",
   kind: "sandbox",
   run: async (ctx, argv) => {
     const parsed = parseDeadline(argv);
@@ -272,8 +349,10 @@ const staleCommand: Command = {
       };
     }
     const { signer } = signed;
-    const dataset = CONFIG.datasets[0];
-    if (!dataset) return { render: "text", data: "sandbox stale: no datasets in config" };
+    // optional dataset positional (the flags come after it): `sandbox stale overtime-sports-odds`
+    const wanted = argv[2] !== undefined && !argv[2].startsWith("--") ? argv[2] : undefined;
+    const dataset = wanted === undefined ? CONFIG.datasets[0] : CONFIG.datasets.find((d) => d.id === wanted);
+    if (!dataset) return { render: "text", data: wanted === undefined ? "sandbox stale: no datasets in config" : `sandbox stale: unknown dataset ${wanted} · try datasets` };
 
     const rows: KvRow[] = [["dataset", dataset.id]];
     let quote: DatasetQuote;
@@ -318,6 +397,8 @@ const staleCommand: Command = {
     if (requested !== expirySeconds) {
       rows.push(["deadline clamp", `${requested}s requested · clamped to ${expirySeconds}s (escrow floor 5 min, ExpiryTooShort)`]);
     }
+
+    if (signer.kind === "circle") return staleViaCircle(ctx, { dataset, quote, sla, payloadHash, metaBlock, proof, rows });
 
     let jobId: bigint;
     try {
@@ -482,6 +563,14 @@ const claimCommand: Command = {
     const signed = await resolveSigner();
     if (!signed.ok) {
       return { render: "kv", data: { rows: [...rows, ["signer", `✗ ${signed.reason}`]] } };
+    }
+    if (signed.signer.kind === "circle") {
+      return {
+        render: "kv",
+        data: {
+          rows: [...rows, ["claim", "✗ no browser key on this deployment · claimRefund is permissionless: any wallet can poke it after the deadline, and the protocol sweeps expired jobs (scripts/sweep-expired.mjs); the funds return to the buyer either way"]],
+        },
+      };
     }
     let receipt: TransactionReceipt;
     try {

@@ -47,3 +47,6 @@ scripts/deck-to-pdf.sh
 
 # pre-rewrite safety bundle
 .git-backups/
+
+# editor/session config
+.claude/

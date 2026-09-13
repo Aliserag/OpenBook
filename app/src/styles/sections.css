@@ -61,6 +61,67 @@
   align-items: start;
 }
 
+/* the console is the hero: copy left, the open console right */
+.hero__grid--console {
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 40px;
+}
+
+.hero__grid--console h1 { font-size: clamp(32px, 3.2vw, 44px); }
+
+.hero__grid--console .counters--stack {
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.hero__grid--console .counters--stack .figure {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 0;
+}
+
+.hero__grid--console .counters--stack .figure strong {
+  flex: 0 0 150px;
+  font-size: 24px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.hero__grid--console .counters--stack .figure span { margin-top: 0; }
+
+.hero__grid--console .lede { margin-top: 18px; }
+.hero__grid--console .hero__note { margin-top: 18px; }
+
+/* the inline console must never widen the page on a phone */
+.console--inline { max-width: 100%; min-width: 0; }
+.console--inline .tape__rowhint { white-space: normal; }
+.console--inline .console__hints { display: none; }
+.console--inline .console__chips { flex-wrap: nowrap; overflow: hidden; }
+.console--inline .console__chip { white-space: nowrap; }
+
+/* the hero console's status line: quiet text, one separator between readings, a dot only when something is off */
+.console .console--inline .console__chip,
+.console--inline .console__chip {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.console--inline .console__chip--live { color: var(--muted); }
+.console--inline .console__chip--live .ob-live { display: none; }
+.console--inline .console__chip + .console__chip::before { content: "·"; color: var(--rule-strong); margin: 0 4px 0 2px; }
+.console--inline .console__chips { gap: 4px; }
+
+@media (max-width: 960px) {
+  .hero__grid--console { grid-template-columns: 1fr; gap: 28px; }
+}
+
 .hero__grid .lede {
   margin-top: 22px;
 }
@@ -675,3 +736,68 @@
     display: none;
   }
 }
+
+/* ---- wallet + testnet banner ------------------------------------------ */
+
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 9px 16px;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--stale-bg);
+  border-bottom: 1px solid var(--line);
+}
+.banner a { color: var(--ink); font-weight: 600; }
+.banner__close {
+  background: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+  color: var(--ink-2);
+}
+.banner__close:hover { border-color: var(--ink); color: var(--ink); }
+
+.wallet {
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1;
+  padding: 7px 14px;
+  margin-left: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--sheet);
+  cursor: pointer;
+  align-self: center;
+}
+.hero__nav { align-items: center; }
+.wallet--on .wallet__addr, .wallet--on .wallet__bal { font-family: var(--mono); font-size: 13px; }
+.wallet:disabled { opacity: 0.5; cursor: default; }
+.wallet--on {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--sheet);
+  color: var(--ink);
+  border-color: var(--line-strong);
+  cursor: default;
+}
+.wallet__bal { color: var(--muted); }
+.wallet__faucet { color: var(--accent); }
+.wallet__off {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 0 0 2px;
+}
+.wallet__off:hover { color: var(--refunded); }
+.market-route .wallet--on, .map-route .wallet--on { background: var(--sheet); color: var(--ink); }
+.market-route .wallet, .map-route .wallet { border-color: var(--board-text); }
+.market-route .wallet:not(.wallet--on), .map-route .wallet:not(.wallet--on) { background: var(--board-text); color: var(--board); }

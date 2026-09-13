@@ -8,7 +8,7 @@ const LABELS: Record<PurchaseStep, { title: string; what: string }> = {
   deliver: { title: "Data delivered", what: "one live query through The Graph, stamped with the block it was indexed at" },
   verdict: { title: "Freshness checked", what: "the delivered block is compared with the floor, onchain" },
   settle: { title: "Settled or refunded", what: "the escrow pays the seller, or returns the money" },
-  split: { title: "Fee split", what: "98% to the seller, 2% to the venue treasury" },
+  split: { title: "Fee split", what: "98% to the seller, 2% protocol fee to the treasury" },
 };
 
 export type StepStatus = "waiting" | "running" | "done" | "failed";

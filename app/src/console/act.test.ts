@@ -17,12 +17,17 @@ import type { EnsTextReader } from "../../../mcp/src/ens";
 import {
   actJobStatusRow,
   canBuy,
+  describeSigner,
   classifyRevert,
   clearActJobIfClaimed,
   deserializeActJob,
   formatSendError,
   getActJob,
   parseBuyArgs,
+  freshnessToBlocks,
+  floorForWindow,
+  queryFor,
+  summarizeData,
   rehydrateActJob,
   resolveDatasetQuote,
   resolveDatasetRecord,
@@ -92,6 +97,23 @@ describe("parseBuyArgs", () => {
   it("rejects unknown datasets and missing dataset args", async () => {
     await expect(parseBuyArgs(["buy", "nope"], reader({}))).rejects.toThrow("unknown dataset: nope");
     await expect(parseBuyArgs(["buy"], reader({}))).rejects.toThrow("usage: buy");
+  });
+});
+
+describe("describeSigner", () => {
+  it("a Circle signer names both wallets and the sponsored gas, no key in the browser", () => {
+    const row = describeSigner({
+      kind: "circle",
+      address: "0x00e8350b21365b1dc73ed60ba19ea8b7fda059dc",
+      seller: "0xb63fa642b3bc64d91722f0884d86af5b00e66ca9",
+    });
+    expect(row).toContain("Circle buyer wallet 0x00e8");
+    expect(row).toContain("seller wallet 0xb63f");
+    expect(row).toContain("Gas Station");
+  });
+  it("a key signer prints its kind and address", () => {
+    const row = describeSigner({ kind: "demo", address: "0x1111111111111111111111111111111111111111", wallet: {} as never });
+    expect(row.startsWith("demo 0x1111")).toBe(true);
   });
 });
 
@@ -213,7 +235,7 @@ describe("resolveDatasetQuote failure edge (quote == charge)", () => {
       return records[`${name}|${key}`] ?? null;
     };
     const quote = await resolveDatasetQuote(CONFIG.datasets[0], reader);
-    expect(quote).toEqual({ price: "0.10 USDC/query", priceName: "openbook.eth", amountUsdc: 100000, maxBlockLag: 50, maxLatencyMs: 2000 });
+    expect(quote).toEqual({ price: "0.10 USDC/query", priceName: "openbook.eth", amountUsdc: 100000, maxBlockLag: 50, maxLatencyMs: 2000, payee: null });
   });
 
   it("a SET subname price names the subname as the record that answered", async () => {
@@ -459,5 +481,39 @@ describe("registry registration (carry-in names)", () => {
     const result = await dispatch("buy nope", ctx);
     expect(result.render).toBe("text");
     if (result.render === "text") expect(result.data).toContain("unknown dataset: nope");
+  });
+});
+
+describe("buy caps and freshness", () => {
+  it("turns seconds into a block window per chain, never below one block", () => {
+    expect(freshnessToBlocks(10, "arbitrum")).toBe(40);
+    expect(freshnessToBlocks(1, "arbitrum")).toBe(4);
+    expect(freshnessToBlocks(0.1, "arbitrum")).toBe(1);
+    expect(freshnessToBlocks(60, "ethereum")).toBe(5);
+  });
+  it("refuses a quote above the buyer's cap and carries the flags otherwise", async () => {
+    const records = { "openbook.eth|svc.price": "0.10 USDC/query", "openbook.eth|svc.sla": '{"maxBlockLag":50,"maxLatencyMs":2000}' };
+    await expect(parseBuyArgs(["buy", "overtime-sports-odds", "--max", "0.05"], reader(records))).rejects.toThrow(/above your cap/);
+    const ok = await parseBuyArgs(["buy", "overtime-sports-odds", "--max", "0.10", "--fresh", "10"], reader(records));
+    expect(ok.amountUsdc).toBe(100_000);
+    expect(ok.maxUsdc).toBe(100_000);
+    expect(ok.lagBlocks).toBe(40);
+  });
+});
+
+describe("freshness against the clock", () => {
+  it("puts the floor past the head when the newest block is already older than the window", () => {
+    expect(floorForWindow({ number: 1000, ageSeconds: 1.6 }, 0.1, "arbitrum")).toBe(1006);
+    expect(floorForWindow({ number: 1000, ageSeconds: 1.6 }, 10, "arbitrum")).toBe(1000 - 33);
+    expect(floorForWindow({ number: 500, ageSeconds: 13 }, 60, "ethereum")).toBe(500 - 3);
+  });
+  it("narrows the query to a named pool and summarizes the rows", () => {
+    const uni = CONFIG.datasets.find((d) => d.id === "uniswap-v3-arbitrum-dex")!;
+    expect(queryFor(uni, "WETH/USDC")).toContain('name_contains_nocase: "WETH/USDC"');
+    expect(queryFor(uni)).not.toContain("where");
+    const lines = summarizeData(uni.schema, { liquidityPools: [{ name: "Uniswap V3 WETH/USDC 0.05%", totalValueLockedUSD: "1062940.5", inputTokens: [{ symbol: "WETH", lastPriceUSD: "2522.18" }, { symbol: "USDC", lastPriceUSD: "1.0" }] }] });
+    expect(lines).toEqual(["Uniswap V3 WETH/USDC 0.05% · TVL $1,062,941 · WETH $2,522 · USDC $1"]);
+    const odds = summarizeData("sports-odds/1.0.0", { sportMarkets: [{ homeTeam: "A", awayTeam: "B", homeOdds: "504329754069968826", awayOdds: "495670245930031173" }] });
+    expect(odds).toEqual(["A vs B · home 50.4% · away 49.6%"]);
   });
 });

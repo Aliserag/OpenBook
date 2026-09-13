@@ -7,6 +7,7 @@
 @import "./styles/tokens.css";
 @import "./styles/base.css";
 @import "./styles/sections.css";
+@import "./styles/exchange.css";
 
 /* live dot shared by the kept surfaces */
 .ob-live {
@@ -309,6 +310,26 @@
 }
 
 .console__input::placeholder { color: var(--muted); }
+
+/* ---- inline (hero) variant ------------------------------------------- */
+
+.console--inline {
+  position: relative;
+  inset: auto;
+  z-index: 1;
+  height: 580px;
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--ink);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-1);
+}
+
+.console--inline .console__close { display: none; }
+
+@media (max-width: 960px) {
+  .console--inline { height: 480px; }
+}
 
 .console__launcher {
   position: fixed;

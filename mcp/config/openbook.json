@@ -28,7 +28,7 @@
       "id": "uniswap-v3-arbitrum-dex",
       "subgraphId": "FQ6JYszEKApsBpAmiHesRsd9Ygc6mzmpNRANeVQFYoVX",
       "schema": "dex-amm/4.0.1",
-      "description": "Uniswap V3 AMM pools on Arbitrum (Messari dex schema)",
+      "description": "Uniswap V3 AMM pools on Arbitrum (Messari dex schema) \u00b7 live pool prices and TVL, e.g. WETH/USDC",
       "freshness": {
         "maxAge": 50
       },
@@ -39,7 +39,7 @@
       "id": "opensea-nft-trades",
       "subgraphId": "2GmLsgYGWoFoouZzKjp8biYDkfmeLTkEY3VDQyZqSJHA",
       "schema": "nft-marketplace/2.1.0",
-      "description": "OpenSea (Seaport) NFT trades on Ethereum · 13.9M trades, 2.6M ETH volume, 1.4M traders (Messari nft-marketplace schema)",
+      "description": "OpenSea (Seaport) NFT trades on Ethereum \u00b7 13.9M trades, 2.6M ETH volume, 1.4M traders (Messari nft-marketplace schema)",
       "freshness": {
         "maxAge": 50
       },
@@ -61,7 +61,7 @@
       "id": "overtime-sports-odds",
       "subgraphId": "DFNKpS95y26V3kuTa9MtD2J3ws65QF6RPP7RFLRjaHFx",
       "schema": "sports-odds/1.0.0",
-      "description": "Live sports prediction-market odds on Arbitrum (Overtime) · teams and implied probabilities that move minute to minute",
+      "description": "Sports prediction-market odds on Arbitrum (Overtime v1 markets, historical: the subgraph is live, its markets ended in 2024) \u00b7 teams and implied probabilities",
       "freshness": {
         "maxAge": 50
       },

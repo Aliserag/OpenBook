@@ -10,14 +10,14 @@
  *                        the deliver signature are required)
  *   POST /api/ask/chat/completions   the console's LLM, key held here
  *   POST /api/sepolia    JSON-RPC proxy to the configured Sepolia RPC (ENS reads)
- *   POST /api/circle/status | /api/circle/job | /api/circle/submit
+ *   POST /api/circle/status | /api/circle/job | /api/circle/budget | /api/circle/submit
  *                        Circle developer-controlled wallets (buyer, seller) on Arc:
  *                        the page's keyless purchase signs nothing in the browser
  * Everything else is served from the static assets. No secret ever reaches the
  * browser: keys are Pages secrets (wrangler pages secret put).
  */
 import { LLM_BASE_DEFAULT, LLM_MODEL_DEFAULT, ask, attest, deliver, fetchStudio, parseAttestRequest, parseDeliverRequest, sepoliaRpc } from "./shared";
-import { circleCreateJob, circleEnvFrom, circleStatus, circleSubmit, parseCircleJobRequest, parseCircleSubmitRequest } from "./circle";
+import { circleCreateJob, circleEnvFrom, circleSetBudget, circleStatus, circleSubmit, parseCircleBudgetRequest, parseCircleJobRequest, parseCircleSubmitRequest } from "./circle";
 
 interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -131,6 +131,11 @@ export default {
           const parsed = parseCircleJobRequest(await readJson(request));
           if (typeof parsed === "string") return json({ error: parsed }, 400);
           return json(await circleCreateJob(cenv, parsed), 200);
+        }
+        if (url.pathname === "/api/circle/budget") {
+          const parsed = parseCircleBudgetRequest(await readJson(request));
+          if (typeof parsed === "string") return json({ error: parsed }, 400);
+          return json(await circleSetBudget(cenv, parsed), 200);
         }
         if (url.pathname === "/api/circle/submit") {
           const parsed = parseCircleSubmitRequest(await readJson(request));

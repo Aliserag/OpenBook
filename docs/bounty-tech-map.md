@@ -17,7 +17,7 @@ Sources: the ETHGlobal prize pages for Arc, The Graph and ENS, read on 2026-09-1
 | Paymaster | not needed: Gas Station sponsors the SCA wallets | Not used | Arc's own docs: gas is USDC; the EIP-3009 relayer path is for plain transfers |
 | Agent Stack (CLI Agent Wallet), Nanopayments, x402 | the pay-per-call lane: `/api/x402/query` priced from ENS, settled by Circle's Gateway facilitator; the buyer is a Circle Agent Wallet | Live | agent wallet `0xe94b…6f1c` paid $0.10 and $0.15 over `GatewayWalletBatched` on Arc testnet (2026-09-13); `app/worker/x402.ts` |
 | StableFX, Swap Kit | no fit (single-currency venue) | Not used | |
-| ERC-8004 identity | the venue's agent identity | Live | agent 894065, `agent-registration` ENS record |
+| ERC-8004 identity | the protocol's agent identity | Live | agent 894065, `agent-registration` ENS record |
 
 Prize label: DeFi/Onchain Finance. The Agentic prize brief centres on the Agent Stack; we use Circle Wallets and Gas Station instead, and say so.
 

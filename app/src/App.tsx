@@ -1,7 +1,9 @@
 /**
- * OpenBook: one page, five sections. Hero (the latest real refund) → Try it
- * (a live keyless purchase) → The market → The books → How it works. The
- * console dock, replay theater and system map stay as secondary surfaces.
+ * OpenBook: one page, five sections. Hero (the console, open, with the latest
+ * real refund as its first receipt) → The market (an exchange screen) → The
+ * books → Try it (the same purchase with buttons) → How it works. The replay
+ * theater and the system map stay as secondary surfaces; the system map keeps
+ * the docked console.
  */
 import { useEffect, useState, type JSX } from "react";
 import { setEscrowAddress, setUsdcAddress } from "../../agent/escrow";
@@ -11,11 +13,12 @@ import { FeedProvider } from "./data/feed";
 import { Hero } from "./sections/Hero";
 import { TryIt } from "./sections/TryIt";
 import { MarketSection } from "./sections/MarketSection";
-import { Books } from "./sections/Books";
 import { Builders } from "./sections/Builders";
 import { Console } from "./console/Console";
 import { TheaterRoute } from "./theater/Theater";
 import { SystemMap } from "./map/MapCanvas";
+import { TopBar } from "./ui/TopBar";
+import { FaucetBanner } from "./ui/FaucetBanner";
 
 // Chain-specific USDC (VITE_USDC_ADDRESS), mainnet override for the escrow module.
 if (env.usdcAddress !== undefined && /^0x[0-9a-fA-F]{40}$/.test(env.usdcAddress)) {
@@ -26,10 +29,20 @@ setEscrowAddress(ADDR.escrow);
 
 export default function App(): JSX.Element {
   const [armed, setArmed] = useState<"fresh" | "fail" | null>(null);
-  const [mapRoute, setMapRoute] = useState<boolean>(() => window.location.hash === "#map");
+  const routeOf = (): "map" | "market" | "page" =>
+    window.location.hash === "#map" ? "map" : window.location.hash === "#market" ? "market" : "page";
+  const [route, setRoute] = useState<"map" | "market" | "page">(routeOf);
+  const mapRoute = route === "map";
+  const marketRoute = route === "market";
 
   useEffect(() => {
-    const onHash = (): void => setMapRoute(window.location.hash === "#map");
+    const onHash = (): void => {
+      const next = routeOf();
+      setRoute(next);
+      if (next !== "page") window.scrollTo(0, 0);
+      // a section link from another page: the section mounts after the route flips
+      else if (window.location.hash.length > 1) window.setTimeout(() => document.querySelector(window.location.hash)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -45,26 +58,31 @@ export default function App(): JSX.Element {
 
   return (
     <FeedProvider>
+      <FaucetBanner />
       {mapRoute ? (
         <main className="wrap map-route">
-          <p>
-            <a href="#">← back to the page</a>
-          </p>
+          <TopBar current="map" />
           <SystemMap />
+        </main>
+      ) : marketRoute ? (
+        <main className="market-route">
+          <div className="wrap">
+            <TopBar current="market" />
+          </div>
+          <MarketSection variant="page" />
         </main>
       ) : (
         <main>
-          <Hero onBuy={() => go("fresh")} onFail={() => go("fail")} />
+          <Hero />
+          <MarketSection variant="teaser" />
           <TryIt armed={armed} onArmedConsumed={() => setArmed(null)} />
-          <MarketSection />
-          <Books />
           <Builders onConsole={openConsole} onBuy={() => go("fresh")} />
           <footer className="foot wrap">
             <span className="tiny">OpenBook · built for ETHOnline 2026 · Arc testnet, ENSv2 on Sepolia, The Graph</span>
           </footer>
         </main>
       )}
-      <Console />
+      {(mapRoute || marketRoute) && <Console />}
       <TheaterRoute />
     </FeedProvider>
   );
