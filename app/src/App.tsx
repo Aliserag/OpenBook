@@ -41,7 +41,7 @@ export default function App(): JSX.Element {
       setRoute(next);
       if (next !== "page") window.scrollTo(0, 0);
       // a section link from another page: the section mounts after the route flips
-      else if (window.location.hash.length > 1) window.setTimeout(() => document.querySelector(window.location.hash)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+      else if (/^#[A-Za-z][\w-]*$/.test(window.location.hash)) window.setTimeout(() => document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);

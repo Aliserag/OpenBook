@@ -1,5 +1,5 @@
 {
-  "takenAt": "2026-09-13T12:54:50.267Z",
+  "takenAt": "2026-09-13T12:59:26.709Z",
   "dailyPnLs": [
     {
       "id": "day-2838",
@@ -124,10 +124,10 @@
     {
       "id": "day-2865",
       "startedAt": "1789295608",
-      "revenue": "1078000",
+      "revenue": "1519000",
       "costs": "0",
-      "refunds": "700000",
-      "net": "378000"
+      "refunds": "800000",
+      "net": "719000"
     }
   ],
   "refundIssueds": [
@@ -142,12 +142,30 @@
       "reason": "client-refund"
     },
     {
-      "id": "0xf9ffb98ebc8810eecbd9bcb7c9a79084b51022962e8860c7044fc33d4b01a4fa2c000000",
-      "jobId": "64",
+      "id": "0xfc8090afb710913568d12f4ee0e95d7c313a09d3c69a8ab08109ffb9b194b9d335000000",
+      "jobId": "141",
       "reason": "client-refund"
     }
   ],
   "providers": [
+    {
+      "id": "0xb63fa642b3bc64d91722f0884d86af5b00e66ca9",
+      "jobs": 61,
+      "settled": "3773000",
+      "refunded": "2700000",
+      "delivered": 55,
+      "avgLagBlocks": "75.18181818181818181818181818181824",
+      "lastJobAt": "1789304309"
+    },
+    {
+      "id": "0x40bbde3d8d44694d821c52e50db0e87997538caf",
+      "jobs": 1,
+      "settled": "0",
+      "refunded": "0",
+      "delivered": 0,
+      "avgLagBlocks": "0",
+      "lastJobAt": "1789304301"
+    },
     {
       "id": "0x526c3d50c2c8c9d3ef5963ceac51dc431e0251c4",
       "jobs": 1,
@@ -165,15 +183,6 @@
       "delivered": 0,
       "avgLagBlocks": "0",
       "lastJobAt": "1789303870"
-    },
-    {
-      "id": "0xb63fa642b3bc64d91722f0884d86af5b00e66ca9",
-      "jobs": 56,
-      "settled": "3332000",
-      "refunded": "2600000",
-      "delivered": 50,
-      "avgLagBlocks": "80.74000000000000000000000000000006",
-      "lastJobAt": "1789303807"
     },
     {
       "id": "0x40ead21e53091bb70f53875d24fa4ba192530e1a",
@@ -1038,15 +1047,6 @@
       "delivered": 1,
       "avgLagBlocks": "169",
       "lastJobAt": "1789056478"
-    },
-    {
-      "id": "0x7ea043508004244478cdc8d99a5c11d6f7604fcf",
-      "jobs": 1,
-      "settled": "0",
-      "refunded": "367063",
-      "delivered": 1,
-      "avgLagBlocks": "179",
-      "lastJobAt": "1789055654"
     }
   ]
 }

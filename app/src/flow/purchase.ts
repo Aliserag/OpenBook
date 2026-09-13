@@ -372,7 +372,10 @@ export async function runPurchase(
     } catch (error) {
       return fail("pay", `The dataset chain head could not be read, so no freshness floor can be set: ${plainReason(error)}`);
     }
-    minBlock = head - quote.maxBlockLag;
+    // the buyer allows twice the seller's promise (at least a minute on Arbitrum, ten on
+    // Ethereum): a seller that keeps its promise always clears it, a stale index still refunds
+    const floorBlocks = dataset.chain === "ethereum" ? 50 : 240;
+    minBlock = head - Math.max(2 * quote.maxBlockLag, floorBlocks);
   }
   const trace: string[] = [];
   let jobId: bigint;
@@ -386,7 +389,7 @@ export async function runPurchase(
     status: "done",
     detail: opts.mode === "fail"
       ? `${usdcText(BigInt(quote.amountUsdc))} USDC locked in escrow · job ${jobId} · floor pinned at ${minBlock.toLocaleString("en-US")}, one block above the delivery, on purpose`
-      : `${usdcText(BigInt(quote.amountUsdc))} USDC locked in escrow · job ${jobId} · floor ${minBlock.toLocaleString("en-US")}`,
+      : `${usdcText(BigInt(quote.amountUsdc))} USDC locked in escrow · job ${jobId} · floor ${minBlock.toLocaleString("en-US")} (twice the seller's promised window)`,
     txHash: trace[trace.length - 1],
     data: { jobId: String(jobId), minBlock: String(minBlock), txs: trace.join(",") },
   });
