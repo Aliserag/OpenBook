@@ -432,12 +432,12 @@ export interface SuggestedAsk {
 export const SUGGESTED_ASKS: SuggestedAsk[] = [
   { label: "Get me the odds for Charlotte 49ers vs Western Carolina, max 10 cents, under 10 seconds old", line: 'buy overtime-sports-odds --match "Charlotte 49ers" --max 0.10 --fresh 10' },
   { label: "Same odds, but no older than a tenth of a second", line: 'buy overtime-sports-odds --match "Charlotte 49ers" --fresh 0.1' },
-  { label: "What's the USDC lending rate on Aave, under 10 seconds old?", line: 'buy aave-v3-arbitrum-lending --match "USDC" --fresh 10' },
-  { label: "What is WETH trading at on Uniswap, under a minute old?", line: 'buy uniswap-v3-arbitrum-dex --match "WETH/USDC" --fresh 60' },
-  { label: "Show me the newest NFT trades on OpenSea, under 5 minutes old", line: "buy opensea-nft-trades --fresh 300" },
+  { label: "What's the current USDC lending rate on Aave? Under 10 seconds old", line: 'buy aave-v3-arbitrum-lending --match "USDC" --fresh 10' },
+  { label: "What's ETH trading at on Uniswap right now? Under a minute old", line: 'buy uniswap-v3-arbitrum-dex --match "WETH/USDC" --fresh 60' },
+  { label: "What sold on OpenSea most recently? Under 5 minutes old", line: "buy opensea-nft-trades --fresh 300" },
   { label: "Which ENS names were just registered? Under 5 minutes old", line: "buy ens-registrations --fresh 300" },
   { label: "What data can I buy?", line: "datasets" },
-  { label: "What has the protocol earned?", line: "books" },
+  { label: "How much has the protocol earned?", line: "books" },
 ];
 
 /** The freshness a dataset's chain can actually meet: seconds on Arbitrum, minutes on Ethereum. */
