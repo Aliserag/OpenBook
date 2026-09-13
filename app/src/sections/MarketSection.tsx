@@ -75,8 +75,8 @@ function buy(datasetId: string, maxBlockLag: number | null, chain: "arbitrum" | 
   const blockSeconds = chain === "ethereum" ? 12 : 0.25;
   const floorSeconds = chain === "ethereum" ? 600 : 60;
   const promised = maxBlockLag === null ? floorSeconds : Math.round(maxBlockLag * blockSeconds);
-  const window = Math.max(floorSeconds, 2 * promised);
-  window.dispatchEvent(new CustomEvent("openbook:console-run", { detail: { line: `buy ${datasetId} --fresh ${window}` } }));
+  const seconds = Math.max(floorSeconds, 2 * promised);
+  window.dispatchEvent(new CustomEvent("openbook:console-run", { detail: { line: `buy ${datasetId} --fresh ${seconds}` } }));
 }
 
 function BookLine({ row }: { row: BookRow }): JSX.Element {
