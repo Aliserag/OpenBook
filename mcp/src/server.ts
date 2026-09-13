@@ -1,12 +1,12 @@
 /**
- * sla-subgraph-mcp — the OpenBook prize-entry MCP server (Task 5).
+ * sla-subgraph-mcp — the OpenBook MCP server.
  *
  * Seven tools over StdioServerTransport:
  *   list_datasets   — catalog (config + ENS svc.menu)
  *   get_quote       — ENSv2-resolved price/SLA/payee (hard-fails without records)
  *   query_dataset   — Gateway query with _meta freshness gate (never charges stale)
  *   verify_delivery — deterministic APPROVE/REJECT + ERC-8183 settle/refund
- *   get_pnl         — Task 4 open-book subgraph P&L
+ *   get_pnl         — open-book subgraph P&L
  *
  * All external I/O (Gateway HTTP, ENS text, chain writes) goes through seams
  * (fetchImpl / readEnsText / injected clients) — production uses real services,
@@ -670,7 +670,7 @@ export function createMcpServer(app: OpenBookApp): McpServer {
 
   server.tool(
     "list_datasets",
-    "List the datasets this server sells: pinned Start Fresh subgraphs plus the ENS svc.menu catalog. Returns id, schema, price, freshness and description per dataset.",
+    "List the datasets this server sells: the configured subgraphs plus the ENS svc.menu catalog. Returns id, schema, price, freshness and description per dataset.",
     {},
     wrap(async () => app.listDatasets()),
   );
@@ -705,7 +705,7 @@ export function createMcpServer(app: OpenBookApp): McpServer {
 
   server.tool(
     "verify_delivery",
-    "Deterministically verify a delivered query against its SLA: metaBlock >= minBlock (resolved from the onchain job description unless overridden) and a well-formed payloadHash -> APPROVE; otherwise REJECT (STALE_DATA/INVALID_HASH). Purely computes the verdict by default; pass settle:true to ALSO execute complete()/rejectAndRefund() on ERC-8183 (requires the operator key and a fundable Arc RPC).",
+    "Deterministically verify a delivered query against its SLA: metaBlock >= minBlock (resolved from the onchain job description unless overridden) and a well-formed payloadHash -> APPROVE; otherwise REJECT (STALE_DATA/INVALID_HASH). Purely computes the verdict by default; pass settle:true to ALSO execute complete()/reject() on ERC-8183 (requires the operator key and a fundable Arc RPC).",
     {
       jobId: z.string().min(1),
       payloadHash: z.string(),

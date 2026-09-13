@@ -139,7 +139,7 @@ export async function handler(route: Route, req: IncomingMessage & { body?: unkn
         send(res, 400, JSON.stringify({ error: parsed }));
         return;
       }
-      send(res, 200, JSON.stringify(await circleSubmit(cenv, parsed, process.env.OPENBOOK_ATTESTER_PK ?? "")));
+      send(res, 200, JSON.stringify(await circleSubmit(cenv, parsed)));
       return;
     }
     if (route === "sepolia") {

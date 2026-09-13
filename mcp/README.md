@@ -64,7 +64,7 @@ printf '%s\n' \
 
 `query_dataset` appends `_meta { block { number hash timestamp } hasIndexingErrors }`
 to every query (the Gateway's `_Meta_` type has no chain-head field), then reads
-the chain head from the **dataset's own chain RPC** (`mcp/src/chain-head.ts` —
+the chain head from the **dataset's own chain RPC** (`mcp/src/chainhead.ts` —
 the freshness math is same-chain: Arbitrum metaBlock vs Arbitrum head, not Arc's).
 When `chainHead - _meta.block > dataset.freshness.maxAge` the result is
 `unavailable` and **never charged** (the freshness gate fires
@@ -75,7 +75,7 @@ offchain before settling an escrowed job.
 `verify_delivery` is deterministic: `metaBlock >= SLA.minBlock` (parsed from the
 onchain job description) + well-formed hash ⇒ `APPROVE`, else
 `REJECT`/`STALE_DATA`/`INVALID_HASH`. Onchain writes (`complete()` /
-`rejectAndRefund()` on the ERC-8183 escrow named in the config, `0x967e…7Dd5` for OpenBook) only run with `settle: true`.
+`reject()` on the ERC-8183 escrow named in the config, `0x967e…7Dd5` for OpenBook) only run with `settle: true`.
 
 ## Live verification
 

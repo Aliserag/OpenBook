@@ -27,8 +27,8 @@ Buyer / MCP (get_quote) ──getEnsText(fresh, key)──▶ UniversalResolverV
 
 **Why ENSv2 features are central, not cosmetic** (ENS bounty clause): the name has no
 hard-coded price client-side; every quote is resolved live, the records are owned via a
-per-account Permissioned Resolver with role-based access control (only the admin EOA can
-write them), and the agent is discoverable from the name alone through ENSIP-25/26
+per-account Permissioned Resolver with role-based access control (the parent owner holds every role; alpha's key holds
+ROLE_SET_TEXT for `svc.price` on its own node only), and the agent is discoverable from the name alone through ENSIP-25/26
 machine-readable records.
 
 ## Ownership & permission model (verified on Sepolia)
@@ -79,7 +79,7 @@ on the parent's `svc.price` (node not granted). The resolver is `PermissionedRes
 | `svc.menu` | `[{"id":"aave-v3-arbitrum-lending","schema":"lending/3.1.0"},{"id":"uniswap-v3-arbitrum-dex","schema":"dex-amm/4.0.1"}]` | Task 5 `list_datasets` merge (tolerant) |
 | `svc.price` | `0.10 USDC/query` | Task 5 `get_quote` — parsed to 6-dec units (`parsePriceToAmount6dec`); **hard-fail when missing** |
 | `svc.sla` | `{"maxBlockLag":50,"maxLatencyMs":2000}` | Task 5 freshness gate; **hard-fail when missing** |
-| `svc.payee` | `0x4e83eB15EE973A49E40D9A79aB2cA89a4Eb4894E` (PolicyWallet, live) | Revenue recipient; Task 5/6 payouts; **hard-fail when missing** |
+| `svc.payee` | `0xb63fa642b3bc64d91722f0884d86af5b00e66ca9` (Circle seller wallet, live) | Revenue recipient; **hard-fail when missing** |
 | `svc.operator` | `0x64A78b6d5e99274d01D1d0A70B180A73AAEb8d21` (live) | Operator / agent address |
 | `svc.pnl` | `https://api.studio.thegraph.com/query/1760032/open-book/v0.0.8` (live) | Task 4 Studio subgraph endpoint (`get_pnl`, Task 7 dashboard) |
 | `svc.attester` | `0x8D71610fa6E1c95e28Bd465f0236b5c31010C587` (live, [tx](https://sepolia.etherscan.io/tx/0x461cd15b6094f094d510fcd7491e0cc5f2908b0e6cfc9e297658176b9950253a)) | the SlaHook attester and page evaluator: recover the signer of a `/api/deliver` proof and compare with this record or with `SlaHook.attester()` |

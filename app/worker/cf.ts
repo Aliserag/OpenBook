@@ -140,7 +140,7 @@ export default {
         if (url.pathname === "/api/circle/submit") {
           const parsed = parseCircleSubmitRequest(await readJson(request));
           if (typeof parsed === "string") return json({ error: parsed }, 400);
-          return json(await circleSubmit(cenv, parsed, env.OPENBOOK_ATTESTER_PK ?? ""), 200);
+          return json(await circleSubmit(cenv, parsed), 200);
         }
       }
       if (url.pathname === "/api/sepolia") {

@@ -6,7 +6,7 @@ Sellers list data under an ENS name with a price and a freshness promise. A buye
 USDC into an escrow on Arc with that promise written in. The delivery arrives through The
 Graph stamped with the block it was recorded at, and a contract compares the stamp with the
 promise: fresh, the seller is paid; stale, the money goes back. No dispute, no support
-ticket.
+ticket. Built from scratch in four days.
 
 [![OpenBook demo video](https://img.youtube.com/vi/OLUNTuVyvac/hqdefault.jpg)](https://www.youtube.com/watch?v=OLUNTuVyvac)
 
@@ -56,7 +56,7 @@ locks into an escrow on Arc with the promise written in, and the data arrives fr
 stamped with the block it was recorded at. Fresh: 98% to the seller, 2% to the protocol.
 Stale: the contract refuses to pay and the money goes back. Every settlement, refund and fee
 is written into public books anyone can audit. Both outcomes are live on testnet: job 116
-settled with odds 3 seconds old inside a 10-second window
+settled with a delivery indexed 3 seconds earlier inside a 10-second window
 ([0.098 USDC to the seller, 0.002 to the protocol](https://testnet.arcscan.app/tx/0x769685cdda5a6df5606baef78241ce6a065ad89193f0b4641afc33e9644cc2fd)),
 and job 117, asking for odds no older than a tenth of a second, was refused and
 [refunded in full](https://testnet.arcscan.app/tx/0x39d92b9e041a3bf7065a1718d876aec21df7bf7914fc4814ad8e8fbd47db6012)
@@ -73,8 +73,9 @@ litigated. It is refunded.
 ![OpenBook architecture](docs/images/architecture.png)
 
 **Settlement on Arc.** Every purchase is a job on OpenBook's instance of Circle's ERC-8183
-escrow ([0x967e…7Dd5](https://testnet.arcscan.app/address/0x967e005154D0F62C33Eac8E2F44b44d4C4C07Dd5)),
-paid and gassed in USDC, with a 2% platform fee.
+escrow ([0x967e…7Dd5](https://testnet.arcscan.app/address/0x967e005154D0F62C33Eac8E2F44b44d4C4C07Dd5),
+an [ArcProxy](contracts/src/ArcProxy.sol) over Circle's reference implementation so OpenBook
+holds the admin role that whitelists the hook), paid and gassed in USDC, with a 2% platform fee.
 [SlaHook.sol](contracts/src/SlaHook.sol)
 ([0x6060…0846](https://testnet.arcscan.app/address/0x606075F3Cf9b5B66E7e4DD2ea369894374Ff0846))
 is the ERC-8183 hook the escrow calls on every action: on submit it records the hash of the
@@ -87,6 +88,8 @@ with onchain per-transaction and daily caps and an allowlist.
 
 **Data from The Graph, stamped with its block.** Every dataset is a live subgraph on The
 Graph gateway (three on Messari standardized schemas, plus the ENS and Overtime subgraphs).
+The Overtime subgraph's markets are historical, so "3 seconds old" on a sports-odds receipt is
+the index lag of the delivery, which is exactly what the guarantee measures.
 The server appends `_meta { block { number } }` to each query, hashes the payload and signs
 the observation ([app/worker/shared.ts](app/worker/shared.ts)); that block number is what
 the hook compares against the floor. One route settles a job: verify the hash, post the
@@ -99,10 +102,10 @@ indexes every payment, settlement, refund and fee into public books.
 [ENSv2 registry on Sepolia](https://sepolia.etherscan.io/address/0xBDC85dD5b15D7ecb354cd7cb6f2c50b4f2c4F0E2)
 and runs its own
 [UserRegistry subregistry](https://sepolia.etherscan.io/address/0x8eC443d5e7BCB2E9182c83CE96295dFc35085f29),
-so the name is a namespace of markets. Each dataset is a subname with its own price,
-freshness window and payee in text records (`svc.price`, `svc.sla`, `svc.payee`);
-the Aave lending subname quotes 0.15 while the parent quotes 0.10 and pays a
-different wallet. A subname without a resolver inherits the parent's, so a market exists the
+so the name is a namespace of markets. A dataset can be its own subname with its own price,
+freshness window and payee in text records (`svc.price`, `svc.sla`, `svc.payee`): the Aave
+lending subname quotes 0.15 while the parent quotes 0.10 and can name its own payee (today
+both pay the Circle seller wallet); the other four datasets resolve to the parent's records. A subname without a resolver inherits the parent's, so a market exists the
 moment the name does. `svc.pnl` points at the name's public books, and `agent-registration`,
 `agent-context` and `agent-endpoint` records (ENSIP-25/26, tied to ERC-8004 agent 894065)
 let an agent find the market from the name alone. Onboarding a seller is an Enhanced
@@ -112,8 +115,10 @@ only, on its own node
 and it repriced itself
 ([setText](https://sepolia.etherscan.io/tx/0x0b2c133612a735ff69a86cab43c8aabcc231adcf7af4113726f30269d41edac2));
 every other write reverts `EACUnauthorizedAccountRoles`. The server re-resolves price and
-payee from ENS before every job ([app/worker/circle.ts](app/worker/circle.ts)) and there is
-no default anywhere in the code. No ENS, no market.
+payee from ENS before every job ([app/worker/circle.ts](app/worker/circle.ts)); no purchase or
+quote path has a default price or payee (`list_datasets` labels a config price
+`priceSource: "config"` only when Sepolia is unreachable, and never charges it). No ENS, no
+market.
 
 **Wallets.** On the web app the buyer and seller are Circle developer-controlled wallets with
 gas sponsored by Circle Gas Station
@@ -125,12 +130,15 @@ buyer from another chain with App Kit's CCTP bridge
 and a Gateway unified balance
 ([spend on Arc](https://testnet.arcscan.app/tx/0xa956aabeb35342b8c03d7e728a60511f24dcae1793f4885ba290ea54cf196156)).
 An x402 lane sells the same signed delivery per call, paid from a Circle Agent Wallet
-([app/worker/x402.ts](app/worker/x402.ts)).
+([app/worker/x402.ts](app/worker/x402.ts)); it runs on the Vercel functions of the mirror
+deployment (`POST https://ethonline2026-openbook.vercel.app/api/x402/status` returns the terms).
 
 **Freshness is measured at delivery.** The server fetches the data first, reads the source
 chain's head timestamp, and derives the floor from wall-clock and block time, so a request
 for data no older than 0.1 s fails honestly: the newest block is already over a second old
-and the subgraph lags a few seconds more.
+and the subgraph lags a few seconds more. The attester (the server's key) supplies the block
+number it observed; the hook makes that number binding and public, it does not verify it
+against The Graph, so the attester is the trust anchor and the next component to decentralize.
 
 ## Using the demo
 
@@ -145,6 +153,9 @@ server-side model, and a purchase asks how fresh the data must be before it spen
   contract refuses and the escrow refunds in the same receipt.
 - `What data can I buy` lists the datasets with their live ENS prices and windows.
 - `Show me the seller's ENS records` prints the storefront as it resolves right now.
+- `ens can-edit alpha.openbook.eth svc.sla 0xe09C8F90931E97d0aEE998885b306DDF08CE08Cc` shows the
+  resolver refusing a key the parent never granted (`EACUnauthorizedAccountRoles`), live,
+  without a transaction; the same key with `svc.price` is allowed.
 
 **Connect wallet** in the top bar uses your own wallet on Arc testnet instead (testnet USDC
 from [faucet.circle.com](https://faucet.circle.com)); the wallet signs `createJob`,
@@ -165,7 +176,7 @@ cd app && bun run dev # http://localhost:5173
 `cp .env.example .env` and set `GRAPH_GATEWAY_KEY` (free at thegraph.com/studio) for
 deliveries; the deployed app holds it server-side. `forge test` runs the contract tests.
 `scripts/deploy-app.sh` publishes one bundle to Cloudflare Pages and Vercel and
-`scripts/app-audit.mjs` runs 20 browser assertions against the live page.
+`scripts/app-audit.mjs` runs a browser audit against the live page.
 
 ## The MCP server
 
@@ -204,7 +215,7 @@ Listing a new dataset is one entry in [mcp/config/openbook.json](mcp/config/open
 - `contracts/`: SlaHook.sol and PolicyWallet.sol with Foundry tests
 - `app/`: the web app (Vite, React) and its server routes (`app/worker`)
 - `mcp/`: sla-subgraph-mcp and its dataset configs
-- `subgraph/`: the open-book subgraph
+- `subgraph/`: the open-book subgraph (`scripts/deploy-subgraph.sh` substitutes the seller address the mapping books)
 - `agent/`: the seller service and buyer CLI
 - `scripts/`: ENS setup and delegation, Circle treasury ops, deploy and audit
 - `docs/`: architecture, the bounty technology map, the ENS storefront runbook

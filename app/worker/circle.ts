@@ -325,7 +325,7 @@ export async function circleSetBudget(env: CircleEnv, req: CircleBudgetRequest):
 }
 
 /** The seller wallet submits the deliverable the attester signed for a job it is the provider of. */
-export async function circleSubmit(env: CircleEnv, req: CircleSubmitRequest, attesterPk: string): Promise<{ txHash: Hex; seller: Hex }> {
+export async function circleSubmit(env: CircleEnv, req: CircleSubmitRequest): Promise<{ txHash: Hex; seller: Hex }> {
   const pub = createPublicClient({ chain: arcTestnet, transport: http(ARC_RPC) });
   const attester = await pub.readContract({ address: HOOK, abi: HOOK_ABI, functionName: "attester" });
   let signer: string;
@@ -335,7 +335,6 @@ export async function circleSubmit(env: CircleEnv, req: CircleSubmitRequest, att
     throw new Error("the deliver signature is malformed");
   }
   if (signer.toLowerCase() !== attester.toLowerCase()) throw new Error("the deliverable was not observed by the attester (signature mismatch)");
-  void attesterPk;
   const job = await pub.readContract({ address: ESCROW, abi: ESCROW_ABI, functionName: "jobs", args: [BigInt(req.jobId)] });
   const [, , provider, , , , , status] = job;
   if (provider.toLowerCase() !== env.sellerAddress.toLowerCase()) throw new Error(`job ${req.jobId} is not sold by the Circle seller wallet`);

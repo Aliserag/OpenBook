@@ -57,7 +57,7 @@ Every `sell register` writes exactly five text records on `<slug>.openbook.eth`:
 | `svc.payee` | the seller's payout address |
 | `svc.operator` | the address derived from the `operatorKey` env key (falls back to payee) |
 
-The records land on the parent storefront's OwnedResolver (the subname resolves
+The records land on the parent storefront's PermissionedResolver (the subname resolves
 through it), so the buyer CLI, the ENS directory (`listSellers`) and the app all
 see a registered seller with no code change.
 

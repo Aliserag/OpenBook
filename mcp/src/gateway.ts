@@ -1,5 +1,5 @@
 /**
- * The Graph Gateway client for sla-subgraph-mcp (OpenBook Task 5).
+ * The Graph Gateway client for sla-subgraph-mcp.
  *
  * Every query gets the freshness fragment appended so the server can gate on
  * `_meta.block` vs the chain head BEFORE ever charging. The Gateway's _Meta_
@@ -156,7 +156,7 @@ export async function gatewayQuery(opts: {
 }
 
 /**
- * POST an arbitrary GraphQL query to a hosted endpoint (used for the Task 4
+ * POST an arbitrary GraphQL query to a hosted endpoint (used for the
  * open-book Studio query). The query is sent verbatim (it carries its own
  * `_meta` selection).
  */

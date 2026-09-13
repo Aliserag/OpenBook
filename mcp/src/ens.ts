@@ -1,5 +1,5 @@
 /**
- * ENSv2 storefront reader for sla-subgraph-mcp (OpenBook Task 5).
+ * ENSv2 storefront reader for sla-subgraph-mcp.
  *
  * get_quote is ENS-gated: price, SLA and payee are resolved LIVE from the
  * Sepolia ENSv2 `svc.*` text records of the configured name. A missing record

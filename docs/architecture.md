@@ -56,31 +56,27 @@ flowchart LR
 2. **Quote**: `get_quote` parses `svc.price` ("0.10 USDC/query") into 6-decimal
    USDC units and `svc.sla` (`{"maxBlockLag":50,"maxLatencyMs":2000}`) into the
    freshness floor and escrow deadline. Data-only, no writes.
-3. **Pay**: the buyer funds an ERC-8183 job whose description commits the SLA
-   (`{"minBlock":N,"schemaHash":"0x…","maxLatencyMs":M}`). Split-key: the buyer
-   signs `createJob`/`approve`/`fund`; the seller signs `setBudget`.
-4. **Deliver**: the seller runs the dataset query through the Gateway, the
-   `_meta` fragment is appended, and the freshness gate checks
-   `chainHeadBlock − _meta.block ≤ maxAge`. A stale result is marked
-   `unavailable: STALE` and never charged. Fresh results are signed into a
-   deterministic attestation (`queryId|payloadHash|metaBlock`) and submitted:
-   `payloadHash` onchain, `metaBlock` logged.
-5. **Verify**: the buyer re-runs the deterministic verdict
-   (`metaBlock ≥ minBlock` ∧ well-formed hash): `APPROVE` → `complete()`
-   (PaymentReleased to the seller), `REJECT` → `rejectAndRefund()`
-   (Refunded, the money shot). Timed out jobs resolve via `claimRefund()`.
-6. **P&L**: the arc-testnet subgraph indexes only OpenBook's own contract
-   events (never raw USDC `Transfer`s, the EIP-7708 double-count trap) into
-   day-bucketed `DailyPnL` rows; the frontend and `get_pnl` read them from
-   Studio.
+3. **Pay**: the buyer funds an ERC-8183 job whose description commits the promise
+   (`{"minBlock":N,"schemaHash":"0x…","maxLatencyMs":M}`). On the web app a Circle
+   developer-controlled wallet does this server-side; with a browser wallet connected the
+   wallet signs `createJob`, `approve` and `fund` and the seller's Circle wallet signs
+   `setBudget`.
+4. **Deliver**: `/api/deliver` runs the dataset query through the Gateway with the `_meta`
+   fragment appended, hashes the payload and signs `payloadHash | metaBlock` (EIP-191); the
+   seller wallet submits `payloadHash` onchain. The web app derives the floor at delivery
+   time from the buyer's seconds window and the source chain's clock; the MCP server gates
+   on block lag (`maxAge`) before it ever charges.
+5. **Settle**: `/api/attest` verifies the job and the submitted hash onchain, posts the
+   attestation to the hook, simulates `complete()`, and sends `complete()` (PaymentReleased,
+   98% to the seller, 2% to the treasury) or `reject()` (Refunded) in the same request. A job
+   nobody settles resolves to the buyer through `claimTimeout()` after its deadline.
+6. **Books**: the open-book subgraph indexes OpenBook's own contract events (never raw USDC
+   `Transfer`s) into settlements, refunds, fees and day-bucketed `DailyPnL` rows; the
+   market page and `get_pnl` read them from Studio through the cached `/api/subgraph` proxy.
 
-## Deterministic demo (no live staleness)
-
-`scripts/stale-proxy.ts` forwards Gateway queries upstream and replays a
-cached old `_meta` snapshot in every response. `buyer-cli --stale` routes
-delivery through it: `metaBlock` lands below the SLA floor, the verdict is
-`REJECT (STALE_DATA)`, and the escrow fires the onchain refund, the same
-money shot every time.
+The recorded demo uses the live path only: a 0.1 s window fails honestly against the real
+index lag. `scripts/stale-proxy.ts` is a local test aid that replays an old `_meta` snapshot;
+it is not used in any submission run.
 
 ## Trust model (declared, not hidden)
 
@@ -91,11 +87,12 @@ money shot every time.
   EIP-8183 `IACPHook`) is consulted before `complete()`: it re-derives the
   verdict from the committed attestation (`metaBlock >= minBlock` ∧ the proof
   covers the submitted `payloadHash`) and reverts `SlaNotMet(metaBlock, minBlock)`
-  otherwise. A seller therefore *cannot* take money for a stale delivery, even if
-  the buyer's CLI is compromised or replaced, the refund path stays open.
+  otherwise (the revert leaves no event; `Attested` is the observable trail). A seller
+  therefore *cannot* take money for a stale delivery, even if the buyer's client is
+  compromised or replaced; the refund path stays open.
 - The verdict (`verify_delivery`) is deterministic open code:
   `metaBlock >= minBlock` and a well-formed payload hash. Anyone can re-run it.
-- Timeout defaults to the buyer: `claimRefund()` after `expiredAt`. The seller
+- Timeout defaults to the buyer: `claimTimeout()` after the deadline. The seller
   cannot stall.
 - Latency is buyer-attested reputation-layer only; never claimed as
   onchain-proven.

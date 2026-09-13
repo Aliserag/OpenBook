@@ -6,7 +6,7 @@
 # SEPOLIA_PK + SEPOLIA_RPC set):
 #  1/7  ens price                                  -> registration fee (6-dec MockUSDC base units)
 #  2/7  ens resolver deploy <TREASURY_EOA> --name openbook.eth
-#                    --records <records-prep.json> -> CREATE2-predicted OwnedResolver;
+#                    --records <records-prep.json> -> CREATE2-predicted PermissionedResolver;
 #                    the Owner (= deployer = TREASURY_EOA) is admin with the full role
 #                    bitmap (incl. ROLE_SET_TEXT) at ROOT_RESOURCE; init records
 #                    (svc.menu/price/sla) are written atomically at deploy
@@ -219,7 +219,7 @@ stage_price() {
 # the broadcast itself rides stage 3's 60s wait per the plan)
 # ---------------------------------------------------------------------------
 stage_resolver() {
-  echo "── [2/7] resolver deploy (OwnedResolver via VerifiableFactory) ──"
+  echo "── [2/7] resolver deploy (PermissionedResolver via VerifiableFactory) ──"
   if [ -z "$TREASURY_EOA" ]; then
     echo "  cmd: ens resolver deploy <TREASURY_EOA> --chain $CHAIN --name $NAME --records <records-prep.json>"
     echo "  (set TREASURY_EOA in env/.env to get the predicted resolver printed here)"
