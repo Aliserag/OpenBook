@@ -1,14 +1,14 @@
 /**
  * Deterministic deliverable verification + ERC-8183 settlement for
- * sla-subgraph-mcp (OpenBook Task 5).
+ * sla-subgraph-mcp.
  *
  * The gate is pure and deterministic: `metaBlock >= minBlock` and a
  * well-formed payload hash decide APPROVE vs REJECT with NO chain access — the
  * same inputs always produce the same verdict (that is what lets an evaluator
  * settle without trusting the seller). minBlock comes from the job's packed
- * SLA description (Task 3 format) unless the caller supplies it directly.
+ * SLA description (the escrow job format) unless the caller supplies it directly.
  *
- * Settlement (complete / rejectAndRefund) reuses the Task 3 escrow helpers and
+ * Settlement (complete / rejectAndRefund) reuses the shared escrow helpers and
  * only runs when live Arc clients are supplied AND verdict/job are decidable.
  */
 import { keccak256, toBytes, type PublicClient, type WalletClient } from "viem";

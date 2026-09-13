@@ -123,6 +123,7 @@ contract SlaHook is IACPHook {
         bytes32 delivered = submitted[jobId];
         if (delivered == bytes32(0) || a.deliverable != delivered) revert HashMismatch();
         if (a.metaBlock < a.minBlock) {
+            // Rolled back by the revert below: visible in simulation traces only, never onchain.
             emit CompleteBlocked(jobId, a.deliverable, a.metaBlock, a.minBlock);
             revert SlaNotMet(a.metaBlock, a.minBlock);
         }

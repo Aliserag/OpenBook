@@ -123,7 +123,7 @@ contract SlaHookTest is Test {
 
     // --- event trail ------------------------------------------------------------
 
-    function test_blocked_completion_emits_event() public {
+    function test_blocked_completion_emits_then_reverts() public {
         _submit(JOB, HASH);
         vm.prank(attester);
         hook.attest(JOB, HASH, 900, 950);

@@ -1,5 +1,5 @@
 /**
- * Chain-head resolver for the freshness gate (OpenBook Task 5 live-key fix).
+ * Chain-head resolver for the freshness gate (live chain-head reads).
  *
  * The Graph Gateway's `_meta` type has NO `chainHeadBlock` field (live probe,
  * 2026-09-09): requesting it errors the whole query. The freshness reference

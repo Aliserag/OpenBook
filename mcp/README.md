@@ -118,7 +118,7 @@ attestation signature from the operator key.
 ```
 
 `mcp/config/openbook.json` is the reference deployment (GLOBAL pins, verbatim
-subgraph ids from the plan). **Reusability receipt:**
+pinned subgraph ids). **Reusability receipt:**
 `mcp/config/demo2.json` runs the exact same server against the Compound V3
 Ethereum subgraph (`AwoxEZbiWLvv6e3QdvdMZw4WDURdGbvPfHmZRc8Dpfz9`) — one server,
 any subgraph. See `SKILL.md` for how any agent registers a dataset and gets

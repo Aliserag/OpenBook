@@ -26,7 +26,7 @@ const DATASETS = (openbook as { datasets: { id: string; subgraphId: string; sche
 export interface X402Env {
   sellerAddress: string;
   gatewayKey: string;
-  attesterPk: string;
+  attesterPk?: string;
   sepoliaRpc?: string;
 }
 
@@ -143,7 +143,7 @@ export async function x402Query(req: IncomingMessage & { body?: unknown }, res: 
   });
   if (!paid) return;
   const payment = (req as IncomingMessage & { payment?: { payer: string; amount: string; network: string; transaction?: string } }).payment;
-  const out = await deliver(parsed, env.gatewayKey, env.attesterPk);
+  const out = await deliver(parsed, env.gatewayKey, env.attesterPk ?? "");
   if (!out.ok) {
     send(res, out.status, { error: out.error, payment });
     return;

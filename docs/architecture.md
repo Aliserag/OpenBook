@@ -40,7 +40,8 @@ flowchart LR
     B -->|"3 · request delivery"| D
     D -->|"query"| G
     D -->|"4 · signed, block-stamped delivery"| B
-    A -->|"5 · attest + settle"| E
+    B -->|"5 · settle"| A
+    A -->|"attest, then complete() or reject()"| E
     E -->|"complete() consults"| H
     H -->|"fee"| T
     E -->|"6 · events"| K

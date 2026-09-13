@@ -3,7 +3,9 @@
  *
  * Seven tools over StdioServerTransport:
  *   list_datasets   — catalog (config + ENS svc.menu)
+ *   discover_datasets — Subgraph MCP catalog search, paste-ready config entries
  *   get_quote       — ENSv2-resolved price/SLA/payee (hard-fails without records)
+ *   choose_seller   — buyer decision from live ENS terms + index lag, with reasons
  *   query_dataset   — Gateway query with _meta freshness gate (never charges stale)
  *   verify_delivery — deterministic APPROVE/REJECT + ERC-8183 settle/refund
  *   get_pnl         — open-book subgraph P&L
@@ -720,7 +722,7 @@ export function createMcpServer(app: OpenBookApp): McpServer {
 
   server.tool(
     "get_pnl",
-    "Query the openbook-pnl subgraph on arc-testnet (Studio): dailyPnLs { id revenue costs refunds net } plus the indexing _meta block.",
+    "Query the open-book subgraph on arc-testnet (Studio): dailyPnLs { id revenue costs refunds net } plus the indexing _meta block.",
     {},
     wrap(async () => app.getPnl()),
   );

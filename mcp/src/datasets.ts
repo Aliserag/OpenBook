@@ -1,8 +1,8 @@
 /**
- * Dataset registry + config loading for sla-subgraph-mcp (OpenBook Task 5).
+ * Dataset registry + config loading for sla-subgraph-mcp.
  *
  * The global "Start Fresh" data spine is two pinned live Messari subgraphs
- * (verified anchors from the plan). Configs may also self-register datasets:
+ * (verified anchors). Configs may also self-register datasets:
  * anything not in PINNED_SUBGRAPH_IDS is served from the config's own
  * subgraphId, that is how the Compound V3 demo config reuses this server.
  *

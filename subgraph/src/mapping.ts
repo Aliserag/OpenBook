@@ -1,4 +1,4 @@
-// OpenBook P&L subgraph — mapping handlers (Task 4).
+// OpenBook books subgraph — mapping handlers.
 //
 // Semantic ledger built from ERC-8183 commerce events + PolicyWallet economics.
 //   revenue  += Settled.amount    (PaymentReleased — the ONLY revenue line:
@@ -9,13 +9,13 @@
 // JobFunded is a buyer->escrow commitment, NOT earnings — it only records the
 // QueryPaid entity (seller/deadline from JobCreated) and never touches P&L.
 // Policy blocked intents are surfaced via PolicyBlocked (no P&L impact);
-// PolicySet records the current caps into PolicyConfig (Task 7 admin story).
+// PolicySet records the current caps into PolicyConfig (admin caps panel).
 //
 // CRITICAL: we never index raw USDC Transfer events (EIP-7708 double-count trap).
 // Amounts arrive as raw 6-dec BigInt units via the semantic events. Net =
 // revenue - refunds - costs, all BigInt, day-bucket = block.number / 21600.
 //
-// W4 market aggregates (marketplace plan, spec §3): alongside the seller-scoped
+// Market aggregates: alongside the seller-scoped
 // ledger above, the same handlers ALSO book GLOBAL per-provider stats (Provider)
 // and per-day market buckets (MarketDay) for EVERY provider on every indexed
 // escrow (shared reference contract + the OpenBook instance). The seller-scoped
@@ -73,7 +73,7 @@ function isSeller(provider: Address): boolean {
   return provider.toHexString().toLowerCase() == SELLER.toLowerCase();
 }
 
-// The OpenBook escrow instance (living-protocol T14, 2% fee → PolicyWallet).
+// The OpenBook escrow instance (2% fee to PolicyWallet).
 // Every job on OUR instance is OpenBook's market by construction (keyless
 // demo buyers, the console, external sellers listed under openbook.eth), so
 // its ledger rows are booked for every provider. The SELLER filter stays for
@@ -125,7 +125,7 @@ function addCost(day: DailyPnL, amount: BigInt): void {
   day.net = day.revenue.minus(day.refunds).minus(day.costs);
 }
 
-// ---- W4 market aggregates (global, every provider) ----
+// ---- Market aggregates (global, every provider) ----
 
 // JobMeta ids are contract-scoped: the shared reference escrow and the OpenBook
 // instance each own a uint256 jobId counter, so "jm-" + jobId alone could
@@ -167,7 +167,7 @@ function loadOrCreateMarketDay(blockNumber: BigInt): MarketDay {
 // (seller) and expiredAt (deadline) exist ONLY here, so we create the QueryPaid
 // row at creation time with real values; jobId is its stable id.
 export function handleJobCreated(event: JobCreatedEvent): void {
-  // W4 market (GLOBAL — every provider on every indexed escrow):
+  // Market (GLOBAL — every provider on every indexed escrow):
   // register the job for later refund/lag attribution, count the provider's
   // jobs + the day's jobs, and mark the provider active this day exactly once.
   let meta = new JobMeta(jobMetaId(event.address, event.params.jobId));
@@ -193,7 +193,7 @@ export function handleJobCreated(event: JobCreatedEvent): void {
   if (!booksJob(event.address, event.params.provider)) {
     return;
   }
-  // PINNED RISK (accept-and-pin ruling): the "qp-"+jobId key is UNPREFIXED —
+  // KNOWN RISK: the "qp-"+jobId key is UNPREFIXED —
   // the shared reference escrow and the OpenBook instance (ERC8183OpenBook)
   // each own a uint256 jobId counter. A row-id collision would require a
   // shared-escrow lifecycle event for a jobId that the instance later mints,
@@ -239,7 +239,7 @@ export function handleQueryPaid(event: JobFundedEvent): void {
 
 // JobSubmitted(jobId, provider, deliverable) — provider fulfills the job.
 export function handleFulfilled(event: JobSubmittedEvent): void {
-  // W4 market (GLOBAL): count the delivery + running mean lag in blocks
+  // Market (GLOBAL): count the delivery + running mean lag in blocks
   // (fulfillment block - job creation block) for every provider. Jobs whose
   // JobCreated predates this dataSource's startBlock have no JobMeta row —
   // they count as delivered but contribute NO lag sample to the mean.
@@ -280,7 +280,7 @@ export function handleFulfilled(event: JobSubmittedEvent): void {
 // PaymentReleased(jobId, provider, amount) — escrow settlement to seller. This
 // is the sole revenue event: a funded+settled job books its amount exactly once.
 export function handleSettled(event: PaymentReleasedEvent): void {
-  // W4 market (GLOBAL): per-provider settled volume + per-day market volume.
+  // Market (GLOBAL): per-provider settled volume + per-day market volume.
   let provider = loadOrCreateProvider(event.params.provider);
   provider.settled = provider.settled.plus(event.params.amount);
   provider.save();
@@ -307,7 +307,7 @@ export function handleSettled(event: PaymentReleasedEvent): void {
 
 // Refunded(jobId, client, amount) — money returned to the client.
 export function handleRefund(event: RefundedEvent): void {
-  // W4 market (GLOBAL): day refund volume always; per-provider attribution via
+  // Market (GLOBAL): day refund volume always; per-provider attribution via
   // the JobMeta registry (Refunded carries no provider). Refunds for jobs that
   // predate this dataSource's startBlock have no JobMeta — they book into the
   // day bucket but cannot be attributed to a provider row.
@@ -359,7 +359,7 @@ export function handlePolicyBlocked(event: PolicyBlockedEvent): void {
   blocked.save();
 }
 
-// PolicyWallet: PolicySet(perTxCap, dailyCap) — current caps for the Task 7
+// PolicyWallet: PolicySet(perTxCap, dailyCap) — current caps for the
 // admin "caps" panel. Singleton row `current`, updated on every PolicySet.
 export function handlePolicySet(event: PolicySetEvent): void {
   let config = PolicyConfig.load("current");

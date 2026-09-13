@@ -192,10 +192,13 @@ its reasoning), `query_dataset` (signed, block-stamped delivery), `verify_delive
 printf '%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"cli","version":"1.0"}}}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_quote","arguments":{"datasetId":"overtime-sports-odds"}}}' \
-  | bun mcp/src/server.ts --config mcp/config/openbook.json
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"query_dataset","arguments":{"datasetId":"overtime-sports-odds","graphql":"{ sportMarkets(first: 1) { id } }"}}}' \
+  | GRAPH_GATEWAY_KEY=<key> OPERATOR_PRIVATE_KEY=<key> bun mcp/src/server.ts --config mcp/config/openbook.json
 ```
 
-The quote resolves `price`, `sla` and `payee` from the live ENS records (`"source": "ENS"`).
+The quote resolves `price`, `sla` and `payee` from the live ENS records (`"source": "ENS"`);
+the query returns live rows with the gateway's `meta.block`, the payload hash and the operator's
+signature (the quote alone needs no keys).
 Listing a new dataset is one entry in [mcp/config/openbook.json](mcp/config/openbook.json).
 
 ## Deployments

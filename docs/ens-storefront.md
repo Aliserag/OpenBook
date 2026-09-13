@@ -3,10 +3,11 @@
 The OpenBook storefront is an **ENSv2 name on Sepolia** that any buyer, MCP server, or
 frontend resolves live before paying. `openbook.eth` → its Owner's `PermissionedResolver`
 (deployed via the ENSv2 `VerifiableFactory`) → `svc.*` + ENSIP-25/26 text records. The
-records are the *contract* of the storefront: Task 5 `get_quote` **hard-fails**
-(`ENS_RESOLUTION_FAILED`) when `svc.price`/`svc.sla`/`svc.payee` are missing — there is
-no default price anywhere in the code path. Task 7's frontend reads the same records
-through viem.
+records are the *contract* of the storefront: `get_quote` **hard-fails**
+(`ENS_RESOLUTION_FAILED`) when `svc.price`/`svc.sla`/`svc.payee` are missing; no purchase or
+quote path has a default price or payee (`list_datasets` shows a config price labeled
+`priceSource: "config"` only when Sepolia is unreachable, and never charges it). The web
+app reads the same records through viem.
 
 ```
 Buyer / MCP (get_quote) ──getEnsText(fresh, key)──▶ UniversalResolverV2 (Sepolia)
@@ -76,7 +77,7 @@ on the parent's `svc.price` (node not granted). The resolver is `PermissionedRes
 
 | Key | Value (final) | Notes / consumed by |
 |---|---|---|
-| `svc.menu` | `[{"id":"aave-v3-arbitrum-lending","schema":"lending/3.1.0"},{"id":"uniswap-v3-arbitrum-dex","schema":"dex-amm/4.0.1"}]` | Task 5 `list_datasets` merge (tolerant) |
+| `svc.menu` | `[{"id":"aave-v3-arbitrum-lending","schema":"lending/3.1.0"},{"id":"uniswap-v3-arbitrum-dex","schema":"dex-amm/4.0.1"},{"id":"opensea-nft-trades","schema":"nft-marketplace/2.1.0"},{"id":"ens-registrations","schema":"ens/1.0.0"},{"id":"overtime-sports-odds","schema":"sports-odds/1.0.0"}]` | `list_datasets` merge (tolerant) |
 | `svc.price` | `0.10 USDC/query` | Task 5 `get_quote` — parsed to 6-dec units (`parsePriceToAmount6dec`); **hard-fail when missing** |
 | `svc.sla` | `{"maxBlockLag":50,"maxLatencyMs":2000}` | Task 5 freshness gate; **hard-fail when missing** |
 | `svc.payee` | `0xb63fa642b3bc64d91722f0884d86af5b00e66ca9` (Circle seller wallet, live) | Revenue recipient; **hard-fail when missing** |
@@ -153,7 +154,7 @@ exact `echo … >> .env` lines).
 ```bash
 ens get text openbook.eth --chain sepolia --key svc.price     # → 0.10 USDC/query
 ens get text openbook.eth --chain sepolia --key svc.sla       # → {"maxBlockLag":50,"maxLatencyMs":2000}
-ens get text openbook.eth --chain sepolia --key svc.payee     # → <POLICY_WALLET_ADDR>
+ens get text openbook.eth --chain sepolia --key svc.payee     # → 0xb63fa642b3bc64d91722f0884d86af5b00e66ca9 (Circle seller wallet)
 ens get text openbook.eth --chain sepolia --key agent-endpoint[mcp]
 ens get text openbook.eth --chain sepolia --key 'agent-registration[0x00010000034cef52148004a818bfb912233c491871b3d84c89a494bd9e][<AGENT_ID>]'
 ```
@@ -194,8 +195,8 @@ Replace in `scripts/ens/records.json` before executing (setup.sh hard-refuses `C
 > live onchain (10/10 verified; see `the funded-run notes`). This list is
 > kept as the reproducible procedure for a fresh name.
 
-1. `CHANGEME:POLICY_WALLET_ADDR` → Task 2 `PolicyWallet` deploy address (or the ERC-8183
-   payee address) — `svc.payee`.
+1. `CHANGEME:POLICY_WALLET_ADDR` → the seller payout address (today the Circle seller wallet
+   `0xb63f…6ca9`; the PolicyWallet is the fee treasury, not the payee) — `svc.payee`.
 2. `CHANGEME:AGENT_ADDR` → agent wallet (withdrawal caller / operator) — `svc.operator`.
 3. `CHANGEME:AGENT_ID` → ERC-8004 agent `tokenId` from Task 3 — appears in
    `agent-context` and inside the `agent-registration[…]` key (`[CHANGEME:AGENT_ID]` → `[<id>]`).

@@ -1,5 +1,5 @@
 /**
- * Shared external anchors for sla-subgraph-mcp (OpenBook Task 5).
+ * Shared external anchors for sla-subgraph-mcp.
  * Values are the plan's verified anchors (no secrets).
  */
 
