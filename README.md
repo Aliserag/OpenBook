@@ -19,26 +19,54 @@ ticket.
 
 ## The problem and the solution
 
-Agents already spend real money on data at machine speed: a prediction-market agent buys
-odds before it takes a position, a trading agent buys a price before it routes a trade.
-When that data arrives stale the agent acts on it anyway, and there is no refund, no
-dispute, nobody to call. The rails for agents to pay exist. The recourse does not.
+The people driving the next trillion-dollar economy have a blind spot that is going to
+hemorrhage as much as $7 billion by the end of this year (our estimate). The people driving
+it are in fact not people. They are AI agents, and entire economies will be built around how
+they make decisions and the data they use to make them.
 
-OpenBook makes the seller's freshness promise the condition under which the seller gets
-paid. A refund the contract executes itself bounds an agent's loss per query to the gas it
-spent, which is what makes an agent's budget underwritable. It also gives freshness a
-price: a seller can charge more for a tighter window and forfeits the fee when it misses, so
-the incentive runs toward faster indexers and better feeds. Refundable spend lets agents
-hold real budgets, budgets create demand for fresher data, and that demand pays the people
-who make data fresher.
+Every day, agents spend real money on data at machine speed. On Polymarket's fastest
+markets, bots already move 55 to 62% of the volume (Dune). A prediction-market agent buys
+odds before it takes a position, and for it, current data is edge worth paying for. Agentic
+commerce is projected at $1.5 trillion by 2030 (Juniper).
 
-Both outcomes are live on testnet. Job 116 asked for sports odds fresh within 10 seconds,
-received them 3 seconds old, and settled
-([0.098 USDC to the seller, 0.002 to the protocol](https://testnet.arcscan.app/tx/0x769685cdda5a6df5606baef78241ce6a065ad89193f0b4641afc33e9644cc2fd)).
-Job 117 asked for the same odds no older than a tenth of a second, which no seller can
-meet; the contract refused and
-[refunded the full 0.10 USDC](https://testnet.arcscan.app/tx/0x39d92b9e041a3bf7065a1718d876aec21df7bf7914fc4814ad8e8fbd47db6012).
-Nobody asked for the refund.
+Every day, some of that data arrives stale, and the agent acts on it anyway. There is no
+refund, no dispute, no half-dead Discord, nobody to call. Bad data of every kind already
+costs the average organization $12.9 million a year (Gartner, via IBM). Today 54% of
+organizations are deploying agents (KPMG, Q1 2026). Gartner's own forecast is that more
+than 40% of agentic AI projects will be canceled by 2027, and it names the reason:
+inadequate risk controls. The rails exist. The recourse does not.
+
+Recourse is the missing primitive of the agentic economy. Agents will not be trusted with
+real budgets until spending can be undone. Not by a court or a support ticket, but by the
+contract that holds the money.
+
+A refund that the contract executes itself bounds an agent's loss per query to the gas it
+spent, which is what makes an agent's budget underwritable. It is also what turns freshness
+into something people can profit from: a seller can charge more for a tighter freshness
+window and forfeits the fee when it misses, so the incentive runs toward faster indexers and
+better feeds, and the freshness premium becomes an open, observable price instead of a
+private contract. Refundable spend lets agents hold real budgets, real budgets create demand
+for fresher data, and that demand pays the people who make data fresher. An economy where
+agents decide every block needs data priced every block.
+
+OpenBook is that market: the data marketplace for AI agents, with a freshness guarantee
+that enforces itself. Sellers list a dataset under their own onchain name (an ENS name) with
+a price per query and a freshness promise. A buyer agent asks in plain English, its payment
+locks into an escrow on Arc with the promise written in, and the data arrives from The Graph
+stamped with the block it was recorded at. Fresh: 98% to the seller, 2% to the protocol.
+Stale: the contract refuses to pay and the money goes back. Every settlement, refund and fee
+is written into public books anyone can audit. Both outcomes are live on testnet: job 116
+settled with odds 3 seconds old inside a 10-second window
+([0.098 USDC to the seller, 0.002 to the protocol](https://testnet.arcscan.app/tx/0x769685cdda5a6df5606baef78241ce6a065ad89193f0b4641afc33e9644cc2fd)),
+and job 117, asking for odds no older than a tenth of a second, was refused and
+[refunded in full](https://testnet.arcscan.app/tx/0x39d92b9e041a3bf7065a1718d876aec21df7bf7914fc4814ad8e8fbd47db6012)
+without anyone asking.
+
+Prediction markets, lending rates, pool prices, NFT trades and name registrations are on the
+market today; any active subgraph (15,000+ as of today) can be turned into its own monetized
+market with one config line, and an MCP server lets agents discover, compare and buy.
+Tomorrow, anything an agent acts on is sold this way, and the $7 billion blind spot is not
+litigated. It is refunded.
 
 ## How it works
 
