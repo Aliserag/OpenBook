@@ -69,8 +69,14 @@ function Tick({ label, id, hint, children }: { label: string; id: string; hint?:
   );
 }
 
-function buy(datasetId: string): void {
-  window.dispatchEvent(new CustomEvent("openbook:console-run", { detail: { line: `buy ${datasetId}` } }));
+/** A market-page Buy runs the whole purchase (fund, deliver, settle) in one receipt, with a
+ *  window twice the seller's promise (never under a minute on Arbitrum or ten on Ethereum). */
+function buy(datasetId: string, maxBlockLag: number | null, chain: "arbitrum" | "ethereum"): void {
+  const blockSeconds = chain === "ethereum" ? 12 : 0.25;
+  const floorSeconds = chain === "ethereum" ? 600 : 60;
+  const promised = maxBlockLag === null ? floorSeconds : Math.round(maxBlockLag * blockSeconds);
+  const window = Math.max(floorSeconds, 2 * promised);
+  window.dispatchEvent(new CustomEvent("openbook:console-run", { detail: { line: `buy ${datasetId} --fresh ${window}` } }));
 }
 
 function BookLine({ row }: { row: BookRow }): JSX.Element {
@@ -115,7 +121,7 @@ function BookLine({ row }: { row: BookRow }): JSX.Element {
         <span className="is-settled">{row.settledCount}</span> / <span className="is-refunded">{row.refundedCount}</span>
       </td>
       <td className="num">
-        <button type="button" className="xch__buy" data-dataset={row.id} onClick={() => buy(row.id)}>
+        <button type="button" className="xch__buy" data-dataset={row.id} onClick={() => buy(row.id, row.maxBlockLag, row.chain)}>
           Buy
         </button>
       </td>

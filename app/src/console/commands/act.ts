@@ -135,7 +135,7 @@ export function queryFor(dataset: DatasetConfig, match?: string): string {
     case "sports-odds/1.0.0":
       return `{ sportMarkets(first: 3, orderBy: timestamp, orderDirection: desc, where: {isOpen: true${m ? `, homeTeam_contains_nocase: "${m}"` : ""}}) { homeTeam awayTeam homeOdds awayOdds } }`;
     case "nft-marketplace/2.1.0":
-      return `{ trades(first: 3, orderBy: timestamp, orderDirection: desc${m ? `, where: {collection_: {name_contains_nocase: "${m}"}}` : ""}) { timestamp priceETH tokenId collection { name } } }`;
+      return `{ trades(first: 3, orderBy: timestamp, orderDirection: desc${m ? `, where: {collection_: {name_contains_nocase: "${m}"}}` : ""}) { timestamp priceETH tokenId collection { id name } } }`;
     case "ens/1.0.0":
       return `{ registrations(first: 3, orderBy: registrationDate, orderDirection: desc${m ? `, where: {domain_: {name_contains_nocase: "${m}"}}` : ""}) { registrationDate cost domain { name } } }`;
     default:
@@ -170,9 +170,10 @@ export function summarizeData(schema: string, data: unknown): string[] {
   };
   if (schema === "nft-marketplace/2.1.0" && Array.isArray(root["trades"])) {
     return (root["trades"] as Array<Record<string, unknown>>).map((t) => {
-      const c = (t["collection"] as Record<string, unknown> | null)?.["name"];
+      const col = t["collection"] as Record<string, unknown> | null;
+      const c = col?.["name"] ? String(col["name"]) : col?.["id"] ? `collection ${String(col["id"]).slice(0, 6)}…${String(col["id"]).slice(-4)}` : "collection";
       const eth = Number(t["priceETH"]);
-      return `${c ? String(c) : "unnamed collection"} · ${Number.isFinite(eth) ? `${eth.toLocaleString("en-US", { maximumFractionDigits: 4 })} ETH` : "?"} · ${ago(t["timestamp"])}`;
+      return `${c} · ${Number.isFinite(eth) ? `${eth.toLocaleString("en-US", { maximumFractionDigits: 4 })} ETH` : "?"} · ${ago(t["timestamp"])}`;
     });
   }
   if (schema === "ens/1.0.0" && Array.isArray(root["registrations"])) {
