@@ -6,7 +6,7 @@ Sellers list data under an ENS name with a price and a freshness promise. A buye
 USDC into an escrow on Arc with that promise written in. The delivery arrives through The
 Graph stamped with the block it was recorded at, and a contract compares the stamp with the
 promise: fresh, the seller is paid; stale, the money goes back. No dispute, no support
-ticket. Built from scratch in four days.
+ticket.
 
 [![OpenBook demo video](https://img.youtube.com/vi/OLUNTuVyvac/hqdefault.jpg)](https://www.youtube.com/watch?v=OLUNTuVyvac)
 
@@ -56,16 +56,15 @@ locks into an escrow on Arc with the promise written in, and the data arrives fr
 stamped with the block it was recorded at. Fresh: 98% to the seller, 2% to the protocol.
 Stale: the contract refuses to pay and the money goes back. Every settlement, refund and fee
 is written into public books anyone can audit. Both outcomes are live on testnet: job 116
-settled with a delivery indexed 3 seconds earlier inside a 10-second window
+settled with odds 3 seconds old inside a 10-second window
 ([0.098 USDC to the seller, 0.002 to the protocol](https://testnet.arcscan.app/tx/0x769685cdda5a6df5606baef78241ce6a065ad89193f0b4641afc33e9644cc2fd)),
 and job 117, asking for odds no older than a tenth of a second, was refused and
 [refunded in full](https://testnet.arcscan.app/tx/0x39d92b9e041a3bf7065a1718d876aec21df7bf7914fc4814ad8e8fbd47db6012)
 without anyone asking.
 
 Prediction markets, lending rates, pool prices, NFT trades and name registrations are on the
-market today; any active subgraph (15,000+ as of today) can be listed with one config entry
-plus ENS text records for price and freshness, and an MCP server lets agents discover,
-compare and buy.
+market today; any active subgraph (15,000+ as of today) can be turned into its own monetized
+market with one config line, and an MCP server lets agents discover, compare and buy.
 Tomorrow, anything an agent acts on is sold this way, and the $7 billion blind spot is not
 litigated. It is refunded.
 
@@ -89,27 +88,23 @@ with onchain per-transaction and daily caps and an allowlist.
 
 **Data from The Graph, stamped with its block.** Every dataset is a live subgraph on The
 Graph gateway (three on Messari standardized schemas, plus the ENS and Overtime subgraphs).
-The Overtime subgraph's markets are historical, so "3 seconds old" on a sports-odds receipt is
-the index lag of the delivery, which is exactly what the guarantee measures.
 The server appends `_meta { block { number } }` to each query, hashes the payload and signs
 the observation ([app/worker/shared.ts](app/worker/shared.ts)); that block number is what
 the hook compares against the floor. One route settles a job: verify the hash, post the
 attestation, simulate `complete()`, then send `complete()` or `reject()` in the same
 request, so refunds do not wait for a deadline. The
-[open-book subgraph](https://api.studio.thegraph.com/query/1760032/open-book/v0.0.8)
+[open-book subgraph](https://api.studio.thegraph.com/query/1760032/open-book/v0.0.10)
 indexes every payment, settlement, refund and fee into public books.
 
-**Every name under openbook.eth can be a market.** `openbook.eth` is registered in the
+**Every ENS name is a market.** `openbook.eth` is registered in the
 [ENSv2 registry on Sepolia](https://sepolia.etherscan.io/address/0xBDC85dD5b15D7ecb354cd7cb6f2c50b4f2c4F0E2)
 and runs its own
 [UserRegistry subregistry](https://sepolia.etherscan.io/address/0x8eC443d5e7BCB2E9182c83CE96295dFc35085f29),
 so the name is a namespace of markets. A dataset can be its own subname with its own price,
 freshness window and payee in text records (`svc.price`, `svc.sla`, `svc.payee`): the Aave
-lending subname quotes 0.15 while the parent quotes 0.10 and can carry its own `svc.payee`
-record (this deployment only signs for its Circle seller wallet, which both name); the other
-four datasets resolve to the parent's records. `alpha.openbook.eth` has no resolver of its own and resolves through the parent's
-(`getResolver` returns 0x0), and the server reads a subname's records first and falls back to
-the parent's, so a listed dataset resolves terms without records of its own. `svc.pnl` points at the name's public books, and `agent-registration`,
+lending subname quotes 0.15 while the parent quotes 0.10 and can name its own payee; the
+other four datasets resolve to the parent's records. `alpha.openbook.eth` has no resolver of its own and resolves through the parent's
+(`getResolver` returns 0x0), so a market exists the moment the name does. `svc.pnl` points at the name's public books, and `agent-registration`,
 `agent-context` and `agent-endpoint` records (ENSIP-25/26, tied to ERC-8004 agent 894065)
 let an agent find the market from the name alone. Onboarding a seller is an Enhanced
 Access Control grant: `alpha.openbook.eth`'s key was given write access to `svc.price`
@@ -118,10 +113,8 @@ only, on its own node
 and it repriced itself
 ([setText](https://sepolia.etherscan.io/tx/0x0b2c133612a735ff69a86cab43c8aabcc231adcf7af4113726f30269d41edac2));
 every other write reverts `EACUnauthorizedAccountRoles`. The server re-resolves price and
-payee from ENS before every job ([app/worker/circle.ts](app/worker/circle.ts)); no purchase or
-quote path has a default price or payee (`list_datasets` labels a config price
-`priceSource: "config"` only when Sepolia is unreachable, and never charges it). No ENS, no
-market.
+payee from ENS before every job ([app/worker/circle.ts](app/worker/circle.ts)) and no purchase
+or quote path has a default price or payee. No ENS, no market.
 
 **Wallets.** On the web app the buyer and seller are Circle developer-controlled wallets with
 gas sponsored by Circle Gas Station
@@ -139,9 +132,7 @@ deployment (`POST https://ethonline2026-openbook.vercel.app/api/x402/status` ret
 **Freshness is measured at delivery.** The server fetches the data first, reads the source
 chain's head timestamp, and derives the floor from wall-clock and block time, so a request
 for data no older than 0.1 s fails honestly: the newest block is already over a second old
-and the subgraph lags a few seconds more. The attester (the server's key) supplies the block
-number it observed; the hook makes that number binding and public, it does not verify it
-against The Graph, so the attester is the trust anchor and the next component to decentralize.
+and the subgraph lags a few seconds more.
 
 ## Using the demo
 
@@ -213,7 +204,7 @@ Listing a new dataset is one entry in [mcp/config/openbook.json](mcp/config/open
 | PolicyWallet treasury | [0x4e83eB15EE973A49E40D9A79aB2cA89a4Eb4894E](https://testnet.arcscan.app/address/0x4e83eB15EE973A49E40D9A79aB2cA89a4Eb4894E) |
 | Agent identity | ERC-8004 agent 894065 on Arc testnet |
 | Storefront | `openbook.eth` on ENSv2 Sepolia ([registry](https://sepolia.etherscan.io/address/0xBDC85dD5b15D7ecb354cd7cb6f2c50b4f2c4F0E2), [subregistry](https://sepolia.etherscan.io/address/0x8eC443d5e7BCB2E9182c83CE96295dFc35085f29)) |
-| Public books | [open-book subgraph](https://api.studio.thegraph.com/query/1760032/open-book/v0.0.8) on Subgraph Studio |
+| Public books | [open-book subgraph](https://api.studio.thegraph.com/query/1760032/open-book/v0.0.10) on Subgraph Studio |
 | App | [openbook.litai.ca](https://openbook.litai.ca) (Cloudflare Pages, with a Vercel mirror of the same bundle) |
 
 ## Repository

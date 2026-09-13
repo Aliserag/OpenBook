@@ -131,9 +131,13 @@ export function queryFor(dataset: DatasetConfig, match?: string): string {
     case "dex-amm/4.0.1":
       return `{ liquidityPools(first: 3, orderBy: totalValueLockedUSD, orderDirection: desc${m ? `, ${where("")}` : ""}) { name totalValueLockedUSD inputTokens { symbol lastPriceUSD } } }`;
     case "lending/3.1.0":
-      return `{ markets(first: 3, orderBy: totalValueLockedUSD, orderDirection: desc${m ? `, ${where("")}` : ""}) { id name totalValueLockedUSD } }`;
+      return `{ markets(first: 3, orderBy: totalValueLockedUSD, orderDirection: desc${m ? `, ${where("")}` : ""}) { id name totalValueLockedUSD rates { rate side type } } }`;
     case "sports-odds/1.0.0":
       return `{ sportMarkets(first: 3, orderBy: timestamp, orderDirection: desc, where: {isOpen: true${m ? `, homeTeam_contains_nocase: "${m}"` : ""}}) { homeTeam awayTeam homeOdds awayOdds } }`;
+    case "nft-marketplace/2.1.0":
+      return `{ trades(first: 3, orderBy: timestamp, orderDirection: desc${m ? `, where: {collection_: {name_contains_nocase: "${m}"}}` : ""}) { timestamp priceETH tokenId collection { name } } }`;
+    case "ens/1.0.0":
+      return `{ registrations(first: 3, orderBy: registrationDate, orderDirection: desc${m ? `, where: {domain_: {name_contains_nocase: "${m}"}}` : ""}) { registrationDate cost domain { name } } }`;
     default:
       return defaultQueryFor(dataset);
   }
@@ -150,7 +154,33 @@ export function summarizeData(schema: string, data: unknown): string[] {
     });
   }
   if (schema === "lending/3.1.0" && Array.isArray(root["markets"])) {
-    return (root["markets"] as Array<Record<string, unknown>>).map((p) => `${String(p["name"])} · TVL ${usd(p["totalValueLockedUSD"])}`);
+    return (root["markets"] as Array<Record<string, unknown>>).map((p) => {
+      const rates = Array.isArray(p["rates"]) ? (p["rates"] as Array<Record<string, unknown>>) : [];
+      const pick = (side: string) => rates.find((r) => r["side"] === side && r["type"] === "VARIABLE");
+      const pct = (r: Record<string, unknown> | undefined) => (r === undefined ? "" : `${Number(r["rate"]).toFixed(2)}%`);
+      const supply = pick("LENDER");
+      const borrow = pick("BORROWER");
+      const tail = supply || borrow ? ` · supply ${pct(supply) || "?"} · borrow ${pct(borrow) || "?"}` : "";
+      return `${String(p["name"])} · TVL ${usd(p["totalValueLockedUSD"])}${tail}`;
+    });
+  }
+  const ago = (ts: unknown) => {
+    const s = Math.max(0, Math.floor(Date.now() / 1000 - Number(ts)));
+    return s < 90 ? `${s}s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : s < 172800 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`;
+  };
+  if (schema === "nft-marketplace/2.1.0" && Array.isArray(root["trades"])) {
+    return (root["trades"] as Array<Record<string, unknown>>).map((t) => {
+      const c = (t["collection"] as Record<string, unknown> | null)?.["name"];
+      const eth = Number(t["priceETH"]);
+      return `${c ? String(c) : "unnamed collection"} · ${Number.isFinite(eth) ? `${eth.toLocaleString("en-US", { maximumFractionDigits: 4 })} ETH` : "?"} · ${ago(t["timestamp"])}`;
+    });
+  }
+  if (schema === "ens/1.0.0" && Array.isArray(root["registrations"])) {
+    return (root["registrations"] as Array<Record<string, unknown>>).map((r) => {
+      const name = (r["domain"] as Record<string, unknown> | null)?.["name"];
+      const eth = Number(r["cost"]) / 1e18;
+      return `${name ? String(name) : "?"} · registered ${ago(r["registrationDate"])}${Number.isFinite(eth) && eth > 0 ? ` · ${eth.toFixed(4)} ETH` : ""}`;
+    });
   }
   if (schema === "sports-odds/1.0.0" && Array.isArray(root["sportMarkets"])) {
     return (root["sportMarkets"] as Array<Record<string, unknown>>).map((p) => {

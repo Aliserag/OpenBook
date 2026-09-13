@@ -53,7 +53,7 @@ import {
   missingKeyRefusal,
   proposalLine,
   parseFreshnessSeconds,
-  FRESHNESS_QUESTION,
+  freshnessQuestionFor,
   registrySchema,
   requiresRun,
   suggestionsFor,
@@ -483,7 +483,7 @@ export function Console({ variant = "dock" }: { variant?: "dock" | "inline" } = 
             void runPurchasePlan(argv[0], fresh, max, match);
           } else {
             setPendingFresh({ datasetId: argv[0], max, match });
-            say(`ask · ${text}`, FRESHNESS_QUESTION);
+            say(`ask · ${text}`, freshnessQuestionFor(argv[0]));
           }
         } else {
           setPendingAsk({ proposal: outcome.proposal });

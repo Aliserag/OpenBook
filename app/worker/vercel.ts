@@ -10,7 +10,7 @@ import { circleCreateJob, circleEnvFrom, circleSetBudget, circleStatus, circleSu
 export type Route = "subgraph" | "deliver" | "attest" | "ask" | "sepolia" | "circle-status" | "circle-job" | "circle-budget" | "circle-submit";
 
 const FRESH_MS = 45_000;
-const KEEP_MS = 21_600_000; // 6 h, same as the Cloudflare worker
+const KEEP_MS = 86_400_000; // 24 h, same as the Cloudflare worker
 const cache = new Map<string, { at: number; text: string }>();
 
 function readBody(req: IncomingMessage): Promise<string> {

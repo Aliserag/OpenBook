@@ -246,7 +246,8 @@ export function buildSystemPrompt(schema: string, liveContext: string): string {
     "- never invent a command name, an argument, or a value: pick from the registry, fill argv from the context or the question",
     "- a request to get, fetch or buy data maps to buy <dataset>: a spend limit ('max 10 cents', 'up to 0.10') becomes --max <usdc as a decimal, cents converted>; a freshness requirement ('under 10 seconds', 'no older than a minute') becomes --fresh <seconds>; when no freshness was given, omit --fresh and the console will ask",
     "- 'show all data markets', 'what can I buy', 'list datasets' map to datasets",
-    "- a named thing narrows the data with --match <text>: the ETH price, WETH, a pool → uniswap-v3-arbitrum-dex with --match \"WETH/USDC\" (a pool name; other pairs likewise, e.g. \"ARB/USDC\"); a lending market or borrow rate → aave-v3-arbitrum-lending with --match <asset>; a team, a game, odds, a match → overtime-sports-odds with --match <the first team named, e.g. \"Charlotte 49ers\">",
+    "- a named thing narrows the data with --match <text>: the ETH price, WETH, a pool → uniswap-v3-arbitrum-dex with --match \"WETH/USDC\" (a pool name; other pairs likewise, e.g. \"ARB/USDC\"); a lending, supply or borrow rate, an asset on Aave → aave-v3-arbitrum-lending with --match <asset symbol, e.g. \"USDC\">; a team, a game, odds, a match → overtime-sports-odds with --match <the first team named, e.g. \"Charlotte 49ers\">; NFT sales, trades, floor, a collection (Pudgy Penguins, Azuki) → opensea-nft-trades with --match <collection name>; ENS registrations, names just registered, a name → ens-registrations with --match <the name or word> (omit --match for the newest registrations)",
+    "- Ethereum datasets (opensea-nft-trades, ens-registrations) index in minutes: a freshness like 'under 5 minutes' maps to --fresh 300; Arbitrum datasets (sports odds, Aave, Uniswap) take seconds",
     "- 'make it fail', 'make the same purchase fail', 'show me a refund', 'what if the data is stale' map to sandbox stale <dataset> (the last purchase's dataset from the context, else overtime-sports-odds)",
     "- 'the same data' / 'the same thing' keeps the last purchase's dataset AND its --match text from the context",
   ].join("\n");
@@ -431,11 +432,20 @@ export interface SuggestedAsk {
 export const SUGGESTED_ASKS: SuggestedAsk[] = [
   { label: "Get me the odds for Charlotte 49ers vs Western Carolina, max 10 cents, under 10 seconds old", line: 'buy overtime-sports-odds --match "Charlotte 49ers" --max 0.10 --fresh 10' },
   { label: "Same odds, but no older than a tenth of a second", line: 'buy overtime-sports-odds --match "Charlotte 49ers" --fresh 0.1' },
+  { label: "What's the USDC lending rate on Aave, under 10 seconds old?", line: 'buy aave-v3-arbitrum-lending --match "USDC" --fresh 10' },
+  { label: "What is WETH trading at on Uniswap, under 10 seconds old?", line: 'buy uniswap-v3-arbitrum-dex --match "WETH/USDC" --fresh 10' },
+  { label: "Show me the latest Pudgy Penguins trades on OpenSea, under 5 minutes old", line: 'buy opensea-nft-trades --match "pudgy" --fresh 300' },
+  { label: "Which ENS names were just registered? Under 5 minutes old", line: "buy ens-registrations --fresh 300" },
   { label: "What data can I buy?", line: "datasets" },
-  { label: "How fresh are the sports odds right now?", line: "quote overtime-sports-odds" },
   { label: "What has the protocol earned?", line: "books" },
-  { label: "Show me the last refund", line: "jobs --state refunded" },
 ];
+
+/** The freshness a dataset's chain can actually meet: seconds on Arbitrum, minutes on Ethereum. */
+export function freshnessQuestionFor(datasetId: string): string {
+  const chain = CONFIG.datasets.find((d) => d.id === datasetId)?.chain;
+  const example = chain === "ethereum" ? "under 5 minutes" : "under 10 seconds";
+  return `How fresh does the data need to be? Reply with a time, for example: ${example}`;
+}
 
 /** What the console knows after the last receipt: the act job's stage and the last line run. */
 export interface SuggestionContext {

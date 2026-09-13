@@ -21,24 +21,35 @@ import { privateKeyToAccount } from "viem/accounts";
 import openbook from "../../mcp/config/openbook.json";
 import { appendMeta, extractMeta, stripMeta } from "../../mcp/src/gateway";
 
-export const STUDIO_UPSTREAM = "https://api.studio.thegraph.com/query/1760032/open-book/v0.0.8";
-/** Studio rate-limits per deployment: the same subgraph is deployed twice and the proxy fails over. */
-export const STUDIO_UPSTREAMS = [STUDIO_UPSTREAM, "https://api.studio.thegraph.com/query/1760032/open-book/v0.0.9"] as const;
+export const STUDIO_UPSTREAM = "https://api.studio.thegraph.com/query/1760032/open-book/v0.0.10";
+/** Studio rate-limits per deployment: the same subgraph is deployed several times and the proxy fails over. */
+export const STUDIO_UPSTREAMS = [
+  STUDIO_UPSTREAM,
+  "https://api.studio.thegraph.com/query/1760032/open-book/v0.0.11",
+  "https://api.studio.thegraph.com/query/1760032/open-book/v0.0.9",
+  "https://api.studio.thegraph.com/query/1760032/open-book/v0.0.8",
+] as const;
 
 /** POST a subgraph query to the first upstream that is not rate-limited (one retry each). */
 export async function fetchStudio(body: string): Promise<{ response: Response; upstream: string }> {
   let last: Response | null = null;
   let lastUpstream = STUDIO_UPSTREAM;
   for (const upstream of STUDIO_UPSTREAMS) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const response = await fetch(upstream, { method: "POST", headers: { "content-type": "application/json" }, body });
-      if (response.status !== 429) return { response, upstream };
+    // one try per deployment; a rate-limited or missing deployment hands over to the next
+    let response: Response;
+    try {
+      response = await fetch(upstream, { method: "POST", headers: { "content-type": "application/json" }, body });
+    } catch {
+      continue;
+    }
+    if (response.ok) return { response, upstream };
+    if (last === null || response.status !== 404) {
       last = response;
       lastUpstream = upstream;
-      await new Promise((r) => setTimeout(r, 700));
     }
   }
-  return { response: last!, upstream: lastUpstream };
+  if (last === null) throw new Error("every Studio deployment is unreachable");
+  return { response: last, upstream: lastUpstream };
 }
 export const GATEWAY_BASE = "https://gateway.thegraph.com/api";
 export const ESCROW = "0x967e005154D0F62C33Eac8E2F44b44d4C4C07Dd5" as const;

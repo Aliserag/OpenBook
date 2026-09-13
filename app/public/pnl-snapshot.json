@@ -1,5 +1,5 @@
 {
-  "takenAt": "2026-09-13T00:44:08.754Z",
+  "takenAt": "2026-09-13T12:45:21.317Z",
   "dailyPnLs": [
     {
       "id": "day-2838",
@@ -100,13 +100,42 @@
     {
       "id": "day-2861",
       "startedAt": "1789252976",
-      "revenue": "980000",
+      "revenue": "1127000",
       "costs": "0",
-      "refunds": "750000",
-      "net": "230000"
+      "refunds": "1250000",
+      "net": "-123000"
+    },
+    {
+      "id": "day-2862",
+      "startedAt": "1789265796",
+      "revenue": "343000",
+      "costs": "0",
+      "refunds": "250000",
+      "net": "93000"
+    },
+    {
+      "id": "day-2863",
+      "startedAt": "1789274575",
+      "revenue": "784000",
+      "costs": "0",
+      "refunds": "400000",
+      "net": "384000"
+    },
+    {
+      "id": "day-2865",
+      "startedAt": "1789295608",
+      "revenue": "441000",
+      "costs": "0",
+      "refunds": "400000",
+      "net": "41000"
     }
   ],
   "refundIssueds": [
+    {
+      "id": "0xff7df6a0bb8df86aca7ee0988e4a7a32633d9d771030119b2582ced4f6dd222419000000",
+      "jobId": "100",
+      "reason": "client-refund"
+    },
     {
       "id": "0xfe32be2758f901947a36ae788f4d7489aa459f2d0ffce6a866266f8d078180f72d000000",
       "jobId": "68",
@@ -116,22 +145,98 @@
       "id": "0xf9ffb98ebc8810eecbd9bcb7c9a79084b51022962e8860c7044fc33d4b01a4fa2c000000",
       "jobId": "64",
       "reason": "client-refund"
-    },
-    {
-      "id": "0xf8f1c37231159574893c6da1a95e66bca2997c4fc7fe0cebb927edc504aeb3fc1a000000",
-      "jobId": "32",
-      "reason": "client-refund"
     }
   ],
   "providers": [
     {
       "id": "0xb63fa642b3bc64d91722f0884d86af5b00e66ca9",
-      "jobs": 14,
-      "settled": "980000",
-      "refunded": "750000",
-      "delivered": 12,
-      "avgLagBlocks": "21.50000000000000000000000000000001",
-      "lastJobAt": "1789258402"
+      "jobs": 46,
+      "settled": "2695000",
+      "refunded": "2300000",
+      "delivered": 41,
+      "avgLagBlocks": "94.0243902439024390243902439024391",
+      "lastJobAt": "1789303501"
+    },
+    {
+      "id": "0xf8377b641af88f84c94dd93e8f39b49610c8cbd4",
+      "jobs": 3,
+      "settled": "0",
+      "refunded": "0",
+      "delivered": 0,
+      "avgLagBlocks": "0",
+      "lastJobAt": "1789303497"
+    },
+    {
+      "id": "0x99d60aaed7e747d26b20fed34a93ecc06f1c0372",
+      "jobs": 28,
+      "settled": "370000",
+      "refunded": "0",
+      "delivered": 26,
+      "avgLagBlocks": "19.15384615384615384615384615384617",
+      "lastJobAt": "1789303039"
+    },
+    {
+      "id": "0x901d8e36f0c87254133c9270499b469ec51668b8",
+      "jobs": 2,
+      "settled": "600000",
+      "refunded": "0",
+      "delivered": 2,
+      "avgLagBlocks": "247",
+      "lastJobAt": "1789298969"
+    },
+    {
+      "id": "0xc1785f4227f85b98852d263e07a51fd767582ea9",
+      "jobs": 4,
+      "settled": "0",
+      "refunded": "0",
+      "delivered": 0,
+      "avgLagBlocks": "0",
+      "lastJobAt": "1789298557"
+    },
+    {
+      "id": "0xf22b7f4ea8da25d0ccfe15902a810e801e996cbb",
+      "jobs": 1,
+      "settled": "0",
+      "refunded": "500000",
+      "delivered": 1,
+      "avgLagBlocks": "151",
+      "lastJobAt": "1789280540"
+    },
+    {
+      "id": "0xeca77e6f5447f699eabfa9b556312f2ab189a4c5",
+      "jobs": 2,
+      "settled": "0",
+      "refunded": "0",
+      "delivered": 0,
+      "avgLagBlocks": "0",
+      "lastJobAt": "1789280333"
+    },
+    {
+      "id": "0x1b278a4d4eddbc8106d8c143208b07cd2800d134",
+      "jobs": 2,
+      "settled": "0",
+      "refunded": "0",
+      "delivered": 0,
+      "avgLagBlocks": "0",
+      "lastJobAt": "1789280110"
+    },
+    {
+      "id": "0x3543b5dfa5b95d9044e547fff229988862a4e157",
+      "jobs": 1,
+      "settled": "0",
+      "refunded": "0",
+      "delivered": 1,
+      "avgLagBlocks": "60",
+      "lastJobAt": "1789273962"
+    },
+    {
+      "id": "0x15b9f8a8658e10dad42ec08cef158ca1392a8944",
+      "jobs": 21,
+      "settled": "14000000",
+      "refunded": "1000000",
+      "delivered": 14,
+      "avgLagBlocks": "73.85714285714285714285714285714286",
+      "lastJobAt": "1789265150"
     },
     {
       "id": "0xfbe4e6d717adbd06431871182d666890b9d83c8d",
@@ -242,15 +347,6 @@
       "lastJobAt": "1789243972"
     },
     {
-      "id": "0x15b9f8a8658e10dad42ec08cef158ca1392a8944",
-      "jobs": 20,
-      "settled": "14000000",
-      "refunded": "1000000",
-      "delivered": 14,
-      "avgLagBlocks": "73.85714285714285714285714285714286",
-      "lastJobAt": "1789229273"
-    },
-    {
       "id": "0xf8ce4187870ab0517d44e5ce59b35698de182f19",
       "jobs": 1,
       "settled": "100000",
@@ -267,24 +363,6 @@
       "delivered": 12,
       "avgLagBlocks": "89.33333333333333333333333333333333",
       "lastJobAt": "1789221973"
-    },
-    {
-      "id": "0xeca77e6f5447f699eabfa9b556312f2ab189a4c5",
-      "jobs": 1,
-      "settled": "0",
-      "refunded": "0",
-      "delivered": 0,
-      "avgLagBlocks": "0",
-      "lastJobAt": "1789216962"
-    },
-    {
-      "id": "0xc1785f4227f85b98852d263e07a51fd767582ea9",
-      "jobs": 3,
-      "settled": "0",
-      "refunded": "0",
-      "delivered": 0,
-      "avgLagBlocks": "0",
-      "lastJobAt": "1789215783"
     },
     {
       "id": "0xe09c8f90931e97d0aee998885b306ddf08ce08cc",
@@ -312,15 +390,6 @@
       "delivered": 0,
       "avgLagBlocks": "0",
       "lastJobAt": "1789158084"
-    },
-    {
-      "id": "0xf8377b641af88f84c94dd93e8f39b49610c8cbd4",
-      "jobs": 2,
-      "settled": "0",
-      "refunded": "0",
-      "delivered": 0,
-      "avgLagBlocks": "0",
-      "lastJobAt": "1789157765"
     },
     {
       "id": "0x0aa9b3d8f2c86599b8e3f3abc8cbe5363144e806",
@@ -665,15 +734,6 @@
       "lastJobAt": "1789120539"
     },
     {
-      "id": "0x1b278a4d4eddbc8106d8c143208b07cd2800d134",
-      "jobs": 1,
-      "settled": "0",
-      "refunded": "0",
-      "delivered": 0,
-      "avgLagBlocks": "0",
-      "lastJobAt": "1789107641"
-    },
-    {
       "id": "0x27dac9060cf0b8311386d33fe7bec948b52b8ba1",
       "jobs": 1,
       "settled": "0",
@@ -987,42 +1047,6 @@
       "delivered": 1,
       "avgLagBlocks": "174",
       "lastJobAt": "1789054776"
-    },
-    {
-      "id": "0x5eb12e1e58093f4b24775fb9f86871e5dda01537",
-      "jobs": 1,
-      "settled": "349823",
-      "refunded": "0",
-      "delivered": 1,
-      "avgLagBlocks": "154",
-      "lastJobAt": "1789053972"
-    },
-    {
-      "id": "0xbb8dbd29a5d83d0f01550edeab9638218631717b",
-      "jobs": 1,
-      "settled": "1071006",
-      "refunded": "0",
-      "delivered": 1,
-      "avgLagBlocks": "169",
-      "lastJobAt": "1789053683"
-    },
-    {
-      "id": "0x22e25198ded89aa7040c2e5ffde01d5a1da1b9c0",
-      "jobs": 1,
-      "settled": "2000000",
-      "refunded": "0",
-      "delivered": 1,
-      "avgLagBlocks": "27",
-      "lastJobAt": "1789051294"
-    },
-    {
-      "id": "0xe65cee0871d97c0fba46f906358628aad7c0ef58",
-      "jobs": 1,
-      "settled": "2000000",
-      "refunded": "0",
-      "delivered": 1,
-      "avgLagBlocks": "28",
-      "lastJobAt": "1789051210"
     }
   ]
 }

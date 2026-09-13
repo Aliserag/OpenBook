@@ -36,7 +36,7 @@ interface Env {
 }
 
 const FRESH_SECONDS = 45;
-const KEEP_SECONDS = 21600; // 6 h: Studio rate-limits in bursts; the last good copy outlives them
+const KEEP_SECONDS = 86400; // 24 h: Studio rate-limits per deployment and per day; the last good copy outlives a quota block
 
 const CORS = {
   "access-control-allow-origin": "*",

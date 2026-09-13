@@ -103,7 +103,7 @@ attestation signature from the operator key.
                                             // uses the live svc.payee record anyway
   "operatorKey": "OPERATOR_PRIVATE_KEY",    // env var NAME (no secrets in repo)
   "gateway": { "keyEnv": "GRAPH_GATEWAY_KEY", "baseUrl": "https://gateway.thegraph.com" },
-  "pnl": { "endpoint": "https://api.studio.thegraph.com/query/1760032/open-book/v0.0.8" },
+  "pnl": { "endpoint": "https://api.studio.thegraph.com/query/1760032/open-book/v0.0.10" },
   "datasets": [
     {
       "id": "aave-v3-arbitrum-lending",

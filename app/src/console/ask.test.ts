@@ -340,7 +340,7 @@ describe("askLlm round trips (stubbed fetch)", () => {
 
 describe("SUGGESTED_ASKS", () => {
   it("is static, exactly six chips, and every mapping resolves in the registry (keyless)", () => {
-    expect(SUGGESTED_ASKS).toHaveLength(6);
+    expect(SUGGESTED_ASKS).toHaveLength(8);
     for (const ask of SUGGESTED_ASKS) {
       expect(find(ask.line), `chip line "${ask.line}" must resolve`).toBeDefined();
     }
