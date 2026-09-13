@@ -11,7 +11,7 @@
  */
 import type { Address } from "viem";
 
-/** Per-provider market stats over the shared escrow (frozen W4 shape). */
+/** Per-provider market stats over the shared escrow (frozen shape). */
 export interface ProviderStats {
   id: Address;
   jobs: number;

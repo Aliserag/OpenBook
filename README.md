@@ -63,8 +63,9 @@ and job 117, asking for odds no older than a tenth of a second, was refused and
 without anyone asking.
 
 Prediction markets, lending rates, pool prices, NFT trades and name registrations are on the
-market today; any active subgraph (15,000+ as of today) can be turned into its own monetized
-market with one config line, and an MCP server lets agents discover, compare and buy.
+market today; any active subgraph (15,000+ as of today) can be listed with one config entry
+plus ENS text records for price and freshness, and an MCP server lets agents discover,
+compare and buy.
 Tomorrow, anything an agent acts on is sold this way, and the $7 billion blind spot is not
 litigated. It is refunded.
 
@@ -98,15 +99,17 @@ request, so refunds do not wait for a deadline. The
 [open-book subgraph](https://api.studio.thegraph.com/query/1760032/open-book/v0.0.8)
 indexes every payment, settlement, refund and fee into public books.
 
-**Every ENS name is a market.** `openbook.eth` is registered in the
+**Every name under openbook.eth can be a market.** `openbook.eth` is registered in the
 [ENSv2 registry on Sepolia](https://sepolia.etherscan.io/address/0xBDC85dD5b15D7ecb354cd7cb6f2c50b4f2c4F0E2)
 and runs its own
 [UserRegistry subregistry](https://sepolia.etherscan.io/address/0x8eC443d5e7BCB2E9182c83CE96295dFc35085f29),
 so the name is a namespace of markets. A dataset can be its own subname with its own price,
 freshness window and payee in text records (`svc.price`, `svc.sla`, `svc.payee`): the Aave
-lending subname quotes 0.15 while the parent quotes 0.10 and can name its own payee (today
-both pay the Circle seller wallet); the other four datasets resolve to the parent's records. A subname without a resolver inherits the parent's, so a market exists the
-moment the name does. `svc.pnl` points at the name's public books, and `agent-registration`,
+lending subname quotes 0.15 while the parent quotes 0.10 and can carry its own `svc.payee`
+record (this deployment only signs for its Circle seller wallet, which both name); the other
+four datasets resolve to the parent's records. `alpha.openbook.eth` has no resolver of its own and resolves through the parent's
+(`getResolver` returns 0x0), and the server reads a subname's records first and falls back to
+the parent's, so a listed dataset resolves terms without records of its own. `svc.pnl` points at the name's public books, and `agent-registration`,
 `agent-context` and `agent-endpoint` records (ENSIP-25/26, tied to ERC-8004 agent 894065)
 let an agent find the market from the name alone. Onboarding a seller is an Enhanced
 Access Control grant: `alpha.openbook.eth`'s key was given write access to `svc.price`
