@@ -138,6 +138,24 @@ chain state:
 - **ENS**: ENSv2 is Sepolia-only for this bounty, so the agent's names/records stay on Sepolia —
   a constraint of the ENS track, not a mainnet descope.
 
+## Optional polish: verify the sources on the Arc explorer
+
+Not required by the bounty, but it makes "the same project, on mainnet" checkable in one click.
+`forge verify-contract` cannot be scripted here: `https://explorer.arc.io/api` answers with a
+Cloudflare challenge to non-browser clients. The explorer's UI accepts the standard-json input
+instead:
+
+```bash
+# prints the standard-json input to paste into the explorer's "Verify & Publish" page
+forge verify-contract 0x49a2A51adCAde93bd1bc30887973167a8f9234B9 \
+  contracts/reference/AgenticCommerce.sol:AgenticCommerce --show-standard-json-input > /tmp/impl.json
+# the other three need their constructor args:
+#   ArcProxy  (impl, initData)            0x1D2FB397D890aDd415Dd99dFCD00699629D58a62
+#   SlaHook   (escrow, attester)          0xe6Ac092054A17C43e206c8159BB8a9Bd67E97E9E
+#   PolicyWallet (usdc, agent, perTx, daily)  0x651255FCc762A032237e8D14838bA9f18a7171af
+```
+Compiler settings to match: solc **0.8.28**, optimizer on, runs 200, evm version cancun.
+
 ## Reproduce it
 
 ```bash
