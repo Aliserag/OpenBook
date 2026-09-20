@@ -93,7 +93,7 @@ the observation ([app/worker/shared.ts](app/worker/shared.ts)); that block numbe
 the hook compares against the floor. One route settles a job: verify the hash, post the
 attestation, simulate `complete()`, then send `complete()` or `reject()` in the same
 request, so refunds do not wait for a deadline. The
-[open-book subgraph](https://api.studio.thegraph.com/query/1760032/open-book/v0.0.10)
+[open-book subgraph](https://api.studio.thegraph.com/query/1760032/open-book/v0.0.11)
 indexes every payment, settlement, refund and fee into public books.
 
 **Every ENS name is a market.** `openbook.eth` is registered in the
@@ -204,8 +204,20 @@ Listing a new dataset is one entry in [mcp/config/openbook.json](mcp/config/open
 | PolicyWallet treasury | [0x4e83eB15EE973A49E40D9A79aB2cA89a4Eb4894E](https://testnet.arcscan.app/address/0x4e83eB15EE973A49E40D9A79aB2cA89a4Eb4894E) |
 | Agent identity | ERC-8004 agent 894065 on Arc testnet |
 | Storefront | `openbook.eth` on ENSv2 Sepolia ([registry](https://sepolia.etherscan.io/address/0xBDC85dD5b15D7ecb354cd7cb6f2c50b4f2c4F0E2), [subregistry](https://sepolia.etherscan.io/address/0x8eC443d5e7BCB2E9182c83CE96295dFc35085f29)) |
-| Public books | [open-book subgraph](https://api.studio.thegraph.com/query/1760032/open-book/v0.0.10) on Subgraph Studio |
+| Public books | [open-book subgraph](https://api.studio.thegraph.com/query/1760032/open-book/v0.0.11) on Subgraph Studio |
 | App | [openbook.litai.ca](https://openbook.litai.ca) (Cloudflare Pages, with a Vercel mirror of the same bundle) |
+
+**Arc mainnet (chain 5042)** — the same project deployed on mainnet, with real USDC movement
+(three live jobs; every tx hash in [`docs/mainnet-evidence.md`](docs/mainnet-evidence.md)):
+
+| | |
+| --- | --- |
+| Escrow (ERC-8183, 2% fee → the PolicyWallet, SlaHook whitelisted) | [0x1D2FB397D890aDd415Dd99dFCD00699629D58a62](https://explorer.arc.io/address/0x1D2FB397D890aDd415Dd99dFCD00699629D58a62) |
+| SlaHook | [0xe6Ac092054A17C43e206c8159BB8a9Bd67E97E9E](https://explorer.arc.io/address/0xe6Ac092054A17C43e206c8159BB8a9Bd67E97E9E) |
+| PolicyWallet treasury | [0x651255FCc762A032237e8D14838bA9f18a7171af](https://explorer.arc.io/address/0x651255FCc762A032237e8D14838bA9f18a7171af) |
+| Escrow implementation (EIP-8183 reference) | [0x49a2A51adCAde93bd1bc30887973167a8f9234B9](https://explorer.arc.io/address/0x49a2A51adCAde93bd1bc30887973167a8f9234B9) |
+| Mainnet app | [openbook-mainnet.vercel.app](https://openbook-mainnet.vercel.app) (`bunx vite build --mode mainnet`) |
+| Deploy + proof | `ARC_MAINNET_BROADCAST=1 bash scripts/deploy-mainnet.sh` then `bash scripts/mainnet-loop.sh` |
 
 ## Repository
 

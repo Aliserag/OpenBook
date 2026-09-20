@@ -339,7 +339,7 @@ describe("askLlm round trips (stubbed fetch)", () => {
 });
 
 describe("SUGGESTED_ASKS", () => {
-  it("is static, exactly six chips, and every mapping resolves in the registry (keyless)", () => {
+  it("is static, exactly eight chips, and every mapping resolves in the registry (keyless)", () => {
     expect(SUGGESTED_ASKS).toHaveLength(8);
     for (const ask of SUGGESTED_ASKS) {
       expect(find(ask.line), `chip line "${ask.line}" must resolve`).toBeDefined();
@@ -358,7 +358,13 @@ describe("suggestionsFor", () => {
     expect(suggestionsFor({ lastLine: "buy overtime-sports-odds", job: funded })[0]?.line).toBe("deliver");
     expect(suggestionsFor({ lastLine: "deliver", job: { ...funded, delivered: true } })[0]?.line).toBe("settle");
     const after = suggestionsFor({ lastLine: "settle", job: { ...funded, delivered: true, outcome: "settled" } });
-    expect(after.map((a) => a.line)).toEqual(["replay 101", "buy overtime-sports-odds --fresh 0.1", "books", "jobs --state settled"]);
+    expect(after.map((a) => a.line)).toEqual([
+      "replay 101",
+      "buy overtime-sports-odds --fresh 0.1",
+      'buy uniswap-v3-arbitrum-dex --match "WETH/USDC" --fresh 0.1',
+      "books",
+      "jobs --state settled",
+    ]);
   });
   it("after a refund the chips lead to the replay and the refunds", () => {
     const lines = suggestionsFor({ lastLine: "sandbox stale overtime-sports-odds", job: { ...funded, delivered: true, outcome: "refunded" } }).map((a) => a.line);

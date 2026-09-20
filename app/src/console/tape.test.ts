@@ -14,6 +14,7 @@ import {
 } from "./palette";
 import { copyAckReducer, copyAckText, type CopyAck } from "./blocks/copyAck";
 import { verdictFor } from "./blocks/verdict";
+import { kvRowClass } from "./blocks/KvBlock";
 import { splitHex } from "./blocks/HashChip";
 import type { CommandResult } from "./registry";
 
@@ -278,5 +279,25 @@ describe("hex splitting for copy chips", () => {
   it("ignores truncated ellipsis display values", () => {
     const parts = splitHex("0x1234…abcd");
     expect(parts).toEqual(["0x1234…abcd"]);
+  });
+});
+
+describe("receipt row tones", () => {
+  it("colours the money rows by outcome, and the SLA rows by fresh/stale", () => {
+    expect(kvRowClass("verdict", "APPROVE · 0xabc")).toContain("--ok");
+    expect(kvRowClass("verdict", "REFUSED · complete() reverted SlaNotMet(1, 2)")).toContain("--refuse");
+    expect(kvRowClass("refund", "0.10 USDC back to the buyer, in full, no fee")).toContain("--refund");
+    expect(kvRowClass("sla floor", "block 505,582,018 · the delivery clears it")).toContain("--fresh");
+    expect(kvRowClass("sla floor", "block 505,582,486 · 4 blocks past the head: nothing this fresh exists yet · the delivery is below it")).toContain("--stale");
+    expect(kvRowClass("freshness", "fresh (metaBlock ≥ floor)")).toContain("--fresh");
+    expect(kvRowClass("freshness", "stale (metaBlock < floor, delta 12 blocks)")).toContain("--stale");
+  });
+
+  it("sizes the numbers the room reads and quiets the plumbing", () => {
+    expect(kvRowClass("data age at delivery", "1.95 s · indexed 3 blocks behind")).toContain("--proof");
+    expect(kvRowClass("your window", "10 s · the seller promises 13 s (50 blocks)")).toContain("--proof");
+    expect(kvRowClass("balance", "8.35 USDC")).toContain("--plumbing");
+    expect(kvRowClass("chain head", "505,582,053 (arbitrum)")).toContain("--plumbing");
+    expect(kvRowClass("dataset", "overtime-sports-odds")).toBe("tape__kvrow");
   });
 });

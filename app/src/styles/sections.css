@@ -1,7 +1,7 @@
 /* ---- hero ------------------------------------------------------------ */
 
 .hero {
-  padding-top: 40px;
+  padding-top: 16px;
 }
 
 .hero__top {
@@ -10,8 +10,8 @@
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
-  padding-bottom: 20px;
-  margin-bottom: 56px;
+  padding-bottom: 12px;
+  margin-bottom: 18px;
   border-bottom: 1px solid var(--line);
   font-size: 15px;
   color: var(--ink-2);
@@ -61,13 +61,25 @@
   align-items: start;
 }
 
-/* the console is the hero: copy left, the open console right */
+/* the console is the hero: full width on top, the promise reading underneath it.
+   The gap is the only separation between the console's footer and the promise, so it
+   carries the full weight of the break — 56px, the same step the two-column hero uses. */
 .hero__grid--console {
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: 40px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 56px;
 }
 
-.hero__grid--console h1 { font-size: clamp(32px, 3.2vw, 44px); }
+/* majority-of-the-screen console: taller than its default inline height, and it is the
+   first thing in the hero, so the receipts are above the fold on any laptop */
+.hero__grid--console .console--inline {
+  height: clamp(440px, 64vh, 760px);
+}
+
+.hero__grid--console .hero__copy {
+  max-width: 92ch;
+}
+
+.hero__grid--console h1 { font-size: clamp(28px, 2.6vw, 40px); max-width: 46ch; }
 
 .hero__grid--console .counters--stack {
   grid-template-columns: 1fr;
@@ -93,7 +105,7 @@
 
 .hero__grid--console .counters--stack .figure span { margin-top: 0; }
 
-.hero__grid--console .lede { margin-top: 18px; }
+.hero__grid--console .lede { margin-top: 14px; max-width: 82ch; }
 .hero__grid--console .hero__note { margin-top: 18px; }
 
 /* the inline console must never widen the page on a phone */
@@ -111,7 +123,7 @@
   border-radius: 0;
   padding: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .console--inline .console__chip--live { color: var(--muted); }
 .console--inline .console__chip--live .ob-live { display: none; }

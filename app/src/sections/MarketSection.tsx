@@ -15,6 +15,7 @@ import { boardRows, marketJobs, useFeed, type BoardRow } from "../data/feed";
 import { sellerNameMap } from "../data/sellers";
 import { fetchLagShared } from "../data/subgraph";
 import { useSessionRuns } from "../flow/session";
+import { useAttributedRuns } from "../data/attributedRuns";
 import { ensRecordUrl, explorerUrl, truncateHash } from "../format";
 import { useLiveValue } from "../ui/useLiveValue";
 import { parsePriceToAmount6dec } from "../../../mcp/src/ens";
@@ -157,7 +158,9 @@ function TradeLine({ row }: { row: BoardRow }): JSX.Element {
 
 export function MarketSection({ variant = "page" }: { variant?: "page" | "teaser" } = {}): JSX.Element {
   const feed = useFeed();
-  const runs = useSessionRuns();
+  const sessionRuns = useSessionRuns();
+  /** dataset attribution read from the chain: the subgraph's rows carry no dataset id */
+  const attributed = useAttributedRuns();
   const sellers = useLiveValue(readSellers, { pollMs: 120_000, staleAfterMs: 360_000, cacheKey: "market.sellers" });
   const fee = useLiveValue(() => platformFee(getPublicClient()), { pollMs: 60_000, staleAfterMs: 180_000 });
   const lag = useLiveValue(
@@ -173,6 +176,9 @@ export function MarketSection({ variant = "page" }: { variant?: "page" | "teaser
   const feeBP = fee.value?.feeBP ?? null;
   const stats = jobs === null ? null : tickerStats(jobs, nowSec, feeBP ?? 0);
   const names = sellerNameMap(sellers.value);
+  // attributions only enrich jobs the subgraph already lists, so no outcome is invented
+  const listed = new Set(jobs === null ? [] : jobs.map((j) => j.jobId.toString()));
+  const runs = [...sessionRuns, ...attributed.filter((r) => listed.has(r.jobId))];
   const allRows = jobs === null ? [] : boardRows(jobs, runs, jobs.length + runs.length, names);
   const tape = allRows.slice(0, TAPE_LIMIT);
   const book = sellers.value === null ? null : bookRows(CONFIG.datasets, sellers.value.sellers, allRows);
@@ -305,6 +311,25 @@ export function MarketSection({ variant = "page" }: { variant?: "page" | "teaser
               </tbody>
             </table>
           </div>
+        </div>
+
+        <div className="xch__list">
+          <h3 className="xch__h3">List your subgraph — one line of config</h3>
+          <pre className="xch__code">{`{ "id": "my-dataset", "subgraphId": "<subgraph-id>", "schema": "lending/3.1.0", "chain": "arbitrum", "freshness": { "maxAge": 50 }, "priceUsdc": 100000 }`}</pre>
+          <p className="small">
+            Add that entry to <code>mcp/config/openbook.json</code> — the listings above are exactly this shape — then set
+            three records on your own ENS name: <code>svc.price</code> (<code>0.10 USDC/query</code>),{" "}
+            <code>svc.sla</code> (<code>{`{"maxBlockLag":50,"maxLatencyMs":2000}`}</code>) and <code>svc.payee</code>,
+            the address that gets paid. You get back a listing agents find through the MCP server —{" "}
+            <code>list_datasets</code>, <code>discover_datasets</code>, <code>get_quote</code>,{" "}
+            <code>choose_seller</code>, <code>query_dataset</code>, <code>verify_delivery</code>, <code>get_pnl</code> —
+            and the hook enforces the window you promised: a fresh delivery pays you, a stale one returns the buyer's
+            money in the same transaction, with no claim filed.
+          </p>
+          <p className="small xch__muted">
+            The same entry points at any origin a server can stamp — a subgraph today, an API or a sensor next. Live on
+            Arc testnet, and every settlement and refund is in the books above this line.
+          </p>
         </div>
       </div>
       )}

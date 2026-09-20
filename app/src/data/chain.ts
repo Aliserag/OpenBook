@@ -28,6 +28,10 @@ export function getPublicClient(): PublicClient {
   publicClient ??= createPublicClient({
     chain: arcChain,
     transport: http(env.arcRpc ?? arcChain.rpcUrls.default.http[0]),
+    // Arc finalizes in well under a second, so viem's 4s default receipt poll was the
+    // largest dead time in a purchase: every fund/settle wait sat idle between polls.
+    // 250ms keeps the receipt the chain's own while cutting the gaps to a quarter second.
+    pollingInterval: 250,
   });
   return publicClient;
 }

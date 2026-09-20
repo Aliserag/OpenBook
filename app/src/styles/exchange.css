@@ -270,6 +270,39 @@
   margin-top: 2px;
 }
 
+/* ---- list your subgraph: the supply-side entry, shown as it ships ---- */
+
+.xch__list {
+  margin-top: 28px;
+  padding: 16px 18px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--sheet);
+}
+
+.xch__list .xch__h3 { margin-bottom: 12px; }
+
+.xch__code {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre;
+}
+
+.xch__list p + p { margin-top: 8px; }
+.xch__list code {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
 .xch__nw {
   white-space: nowrap;
 }

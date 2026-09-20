@@ -21,13 +21,13 @@ import { privateKeyToAccount } from "viem/accounts";
 import openbook from "../../mcp/config/openbook.json";
 import { appendMeta, extractMeta, stripMeta } from "../../mcp/src/gateway";
 
-export const STUDIO_UPSTREAM = "https://api.studio.thegraph.com/query/1760032/open-book/v0.0.10";
+export const STUDIO_UPSTREAM = "https://api.studio.thegraph.com/query/1760032/open-book/v0.0.11";
 /** Studio rate-limits per deployment: the same subgraph is deployed several times and the proxy fails over. */
 export const STUDIO_UPSTREAMS = [
   STUDIO_UPSTREAM,
-  "https://api.studio.thegraph.com/query/1760032/open-book/v0.0.11",
-  "https://api.studio.thegraph.com/query/1760032/open-book/v0.0.9",
-  "https://api.studio.thegraph.com/query/1760032/open-book/v0.0.8",
+  // v0.0.11 is the current deployment and the first source; v0.0.10 is the previous one,
+  // kept as the fail-over. v0.0.9 / v0.0.8 are gone ("Not found") and were dead weight.
+  "https://api.studio.thegraph.com/query/1760032/open-book/v0.0.10",
 ] as const;
 
 /** POST a subgraph query to the first upstream that is not rate-limited (one retry each). */
@@ -52,10 +52,26 @@ export async function fetchStudio(body: string): Promise<{ response: Response; u
   return { response: last, upstream: lastUpstream };
 }
 export const GATEWAY_BASE = "https://gateway.thegraph.com/api";
-export const ESCROW = "0x967e005154D0F62C33Eac8E2F44b44d4C4C07Dd5" as const;
-export const HOOK = "0x606075F3Cf9b5B66E7e4DD2ea369894374Ff0846" as const;
-export const ARC_RPC = "https://rpc.testnet.arc.io";
-export const USDC = "0x3600000000000000000000000000000000000000" as const;
+/**
+ * Deployment addresses + chain: testnet by default, mainnet by environment alone
+ * (OPENBOOK_ESCROW / OPENBOOK_HOOK / ARC_RPC_URL on the Pages/Vercel project, or an
+ * ARC_RPC_URL at build time). The default is the live testnet demo, so nothing here
+ * changes until the mainnet values are set — see scripts/deploy-mainnet.sh.
+ */
+/** The host environment, seen through `globalThis`. Named cast, one access, one reason:
+ *  the worker runs where the platform injects env vars, and the bundler folds a direct
+ *  `process.env.X` away at build time (verified: the name is absent from both targets). */
+const host = globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } };
+
+const envOr = (name: string, fallback: string): string => {
+  const value = host.process?.env?.[name];
+  return typeof value === "string" && value.trim() !== "" ? value : fallback;
+};
+
+export const ESCROW = envOr("OPENBOOK_ESCROW", "0x967e005154D0F62C33Eac8E2F44b44d4C4C07Dd5") as `0x${string}`;
+export const HOOK = envOr("OPENBOOK_HOOK", "0x606075F3Cf9b5B66E7e4DD2ea369894374Ff0846") as `0x${string}`;
+export const ARC_RPC = envOr("ARC_RPC_URL", "https://rpc.testnet.arc.io");
+export const USDC = envOr("OPENBOOK_USDC", "0x3600000000000000000000000000000000000000") as `0x${string}`;
 export const LLM_BASE_DEFAULT = "https://api.fireworks.ai/inference/v1";
 export const LLM_MODEL_DEFAULT = "accounts/fireworks/models/deepseek-v4-flash-0731";
 
@@ -64,9 +80,13 @@ const SOLD_SUBGRAPHS = new Set<string>(
   (openbook as { datasets: { subgraphId: string }[] }).datasets.map((d) => d.subgraphId),
 );
 
+/** The active chain: testnet by default, mainnet by environment (ARC_CHAIN_ID=5042). */
+export const ARC_CHAIN_ID = Number(envOr("ARC_CHAIN_ID", "5042002"));
+export const ARC_CHAIN_NAME = envOr("ARC_CHAIN_NAME", "Arc Testnet");
+
 export const arcTestnet = defineChain({
-  id: 5042002,
-  name: "Arc Testnet",
+  id: ARC_CHAIN_ID,
+  name: ARC_CHAIN_NAME,
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
   rpcUrls: { default: { http: [ARC_RPC] } },
 });
@@ -197,7 +217,9 @@ export async function attest(req: AttestRequest, attesterPk: string): Promise<At
   if (signer.toLowerCase() !== account.address.toLowerCase()) {
     return { ok: false, status: 403, error: "the freshness block was not observed by this attester for that deliverable (deliver signature mismatch)" };
   }
-  const publicClient = createPublicClient({ chain: arcTestnet, transport: http(ARC_RPC) });
+  // Arc blocks land in well under a second; the default 4s receipt poll idled between the
+  // attest and the settle on every purchase. 250ms keeps both waits inside the block time.
+  const publicClient = createPublicClient({ chain: arcTestnet, transport: http(ARC_RPC), pollingInterval: 250 });
   const jobId = BigInt(req.jobId);
   const job = await publicClient.readContract({ address: ESCROW, abi: ESCROW_ABI, functionName: "jobs", args: [jobId] });
   const [, , , evaluator, description, , , status, hook] = job;

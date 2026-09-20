@@ -405,28 +405,43 @@ export function describeSigner(signer: Signer): string {
  * nothing), then the demo key (walletForDemo), then a connected injected
  * wallet (Arc chain added on demand). The instructive error names both
  * recovery paths. Addresses come from the wallet itself, never guessed.
+ * env.buyLane pins the order (VITE_BUY_LANE): `circle` is the stage lane —
+ * the server-signed wallets buy even when a wallet is connected.
  */
 export async function resolveSigner(): Promise<{ ok: true; signer: Signer } | { ok: false; reason: string }> {
-  // a wallet the reader connected wins: they asked to pay with their own money
+  // a wallet the reader connected wins, unless this deployment pinned the lane
   const provider = typeof window !== "undefined" ? getProvider() : undefined;
+  let connected: Address | null = null;
   if (provider) {
     try {
       const accounts = (await provider.request({ method: "eth_accounts" })) as string[] | null;
-      if (accounts && accounts.length > 0) {
-        const address = accounts[0] as Address;
-        return { ok: true, signer: { kind: "injected", wallet: arcWalletClient(address), address } };
-      }
+      connected = accounts !== null && accounts.length > 0 ? (accounts[0] as Address) : null;
     } catch {
       // provider present but unreadable: fall through to the keyless paths
     }
   }
-  const circle = await circleStatus();
-  if (circle.enabled && circle.buyer && circle.seller) {
-    return { ok: true, signer: { kind: "circle", address: circle.buyer, seller: circle.seller } };
+  if (connected !== null && env.buyLane !== "circle") {
+    return { ok: true, signer: { kind: "injected", wallet: arcWalletClient(connected), address: connected } };
+  }
+  if (env.buyLane === "circle") {
+    const pinned = await circleStatus();
+    if (pinned.enabled && pinned.buyer && pinned.seller) {
+      return { ok: true, signer: { kind: "circle", address: pinned.buyer, seller: pinned.seller } };
+    }
+    return { ok: false, reason: "VITE_BUY_LANE=circle but this deployment has no Circle wallets · unset the lane or configure Circle" };
+  }
+  if (env.buyLane === "auto") {
+    const circle = await circleStatus();
+    if (circle.enabled && circle.buyer && circle.seller) {
+      return { ok: true, signer: { kind: "circle", address: circle.buyer, seller: circle.seller } };
+    }
   }
   const demo = walletForDemo();
   if (demo?.account) {
     return { ok: true, signer: { kind: "demo", wallet: demo, address: demo.account.address } };
+  }
+  if (env.buyLane === "wallet") {
+    return { ok: false, reason: "VITE_BUY_LANE=wallet · connect a wallet (Arc testnet) and retry" };
   }
   if (provider) {
     return { ok: false, reason: "browser wallet found but no connected account · connect it (Arc testnet) and retry" };
@@ -474,12 +489,18 @@ export async function walletOpenJob(
   const log = receipt.logs.find((l) => l.address.toLowerCase() === escrowAddress().toLowerCase() && l.topics[0] === JOB_CREATED_TOPIC);
   if (!log?.topics[1]) throw new Error("createJob succeeded but the JobCreated log is missing");
   const jobId = BigInt(log.topics[1]);
-  const budgetTx = await circleSetBudget({ jobId: jobId.toString(), datasetId: p.datasetId, amount: p.amount6dec.toString() });
-  trace.push(["setBudget", `${budgetTx} · the seller's Circle wallet quoted the job, gas sponsored`]);
+  // The seller's quote (a server call into Circle) and the buyer's approval do not depend on
+  // each other, so they run together: serially they cost a whole extra round trip between the
+  // buyer's two wallet prompts. The rejection still surfaces at the await below; the catch
+  // only keeps the window (while the approve prompt is up) from logging it as unhandled.
+  const budget = circleSetBudget({ jobId: jobId.toString(), datasetId: p.datasetId, amount: p.amount6dec.toString() });
+  budget.catch(() => undefined);
   const allowance = (await publicClient.readContract({ address: ADDR.usdc, abi: USDC_SPEND_ABI, functionName: "allowance", args: [signer.address, escrowAddress()] })) as bigint;
   if (allowance < p.amount6dec) {
     await send("approve", { address: ADDR.usdc, abi: USDC_SPEND_ABI, functionName: "approve", args: [escrowAddress(), p.amount6dec * 200n] });
   }
+  const budgetTx = await budget;
+  trace.push(["setBudget", `${budgetTx} · the seller's Circle wallet quoted the job, gas sponsored`]);
   await send("fund", { address: escrowAddress(), abi: ERC8183_ABI, functionName: "fund", args: [jobId, "0x"] });
   return jobId;
 }

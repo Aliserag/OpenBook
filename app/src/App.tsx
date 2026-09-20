@@ -78,7 +78,7 @@ export default function App(): JSX.Element {
           <TryIt armed={armed} onArmedConsumed={() => setArmed(null)} />
           <Builders onConsole={openConsole} onBuy={() => go("fresh")} />
           <footer className="foot wrap">
-            <span className="tiny">OpenBook · built for ETHOnline 2026 · Arc testnet, ENSv2 on Sepolia, The Graph</span>
+            <span className="tiny">OpenBook · built for ETHOnline 2026 · {env.arcChainName}, ENSv2 on Sepolia, The Graph</span>
           </footer>
         </main>
       )}

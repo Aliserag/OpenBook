@@ -23,6 +23,19 @@ export const env = {
   usdcAddress: (import.meta.env.VITE_USDC_ADDRESS as string | undefined) ?? undefined,
   /** The Graph Studio key: gates the delivery query (the open-book P&L endpoint is public) */
   graphKey: (import.meta.env.VITE_GRAPH_GATEWAY_KEY as string | undefined) ?? "",
+  /**
+   * Which wallet lane a console purchase signs with.
+   * - `auto` (default): a wallet the reader connected buys; otherwise the deployment's Circle
+   *   wallets (server-signed, gas sponsored); otherwise the demo key.
+   * - `circle`: the Circle wallets win even when a wallet is connected — the stage lane: no
+   *   prompts, no gas, and the receipt still names the signer it used.
+   * - `wallet`: only a connected wallet (or the demo key) may buy; Circle is never used.
+   */
+  buyLane:
+    (import.meta.env.VITE_BUY_LANE as string | undefined) === "circle" ||
+    (import.meta.env.VITE_BUY_LANE as string | undefined) === "wallet"
+      ? ((import.meta.env.VITE_BUY_LANE as string) as "circle" | "wallet")
+      : ("auto" as const),
   /** Alchemy key: the freshness head reference (Gateway _meta has no
    * chainHeadBlock field — the head comes from the dataset's own chain) */
   alchemyKey: (import.meta.env.VITE_ALCHEMY_API_KEY as string | undefined) ?? "",

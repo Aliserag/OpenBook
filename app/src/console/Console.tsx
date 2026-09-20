@@ -376,11 +376,20 @@ export function Console({ variant = "dock" }: { variant?: "dock" | "inline" } = 
     setCopyAck((prev) => copyAckReducer(prev, { type: "failed", entryId, hash }));
   };
 
-  // the chips follow the tape: the last completed line and the act job's stage
+  // The chips follow the tape and are hidden while an entry is still in flight: the opening
+  // "try these" list is an invitation, not something to read while the answer prints.
+  // A proposal counts as an answer — the line the model picked is what the next chips key
+  // off, so a spoken purchase immediately offers the relevant next move.
+  const busy = entries.some((en) => en.results === null && en.error === undefined && en.ask === undefined);
   const lastDone = [...entries].reverse().find((en) => !en.system && (en.results !== null || en.error !== undefined));
+  const proposalEntry = [...entries].reverse().find((en) => en.ask?.status === "proposal");
+  const proposalAsk =
+    proposalEntry !== undefined && proposalEntry.ask !== undefined && proposalEntry.ask.status === "proposal"
+      ? proposalEntry.ask
+      : null;
   const actJob = getActJob();
   const suggestions = suggestionsFor({
-    lastLine: lastDone?.line ?? null,
+    lastLine: lastDone?.line ?? (proposalAsk !== null ? proposalLine(proposalAsk.proposal) : null),
     job: actJob === null ? null : { jobId: actJob.jobId, datasetId: actJob.datasetId, delivered: actJob.payloadHash !== undefined, ...(actJob.outcome !== undefined ? { outcome: actJob.outcome } : {}) },
   });
 
@@ -755,6 +764,7 @@ export function Console({ variant = "dock" }: { variant?: "dock" | "inline" } = 
         </div>
       )}
 
+      {!busy && (
       <div className="console__asks">
         <span className="console__asks-cap">{entries.length === 0 ? "try these" : "next"}</span>
         {suggestions.map((ask) => (
@@ -769,6 +779,7 @@ export function Console({ variant = "dock" }: { variant?: "dock" | "inline" } = 
           </button>
         ))}
       </div>
+      )}
 
 
       <div className="console__inputrow">

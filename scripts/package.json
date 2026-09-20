@@ -3,6 +3,8 @@
   "private": true,
   "description": "OpenBook operational + audit scripts (app-audit.mjs needs puppeteer-core)",
   "dependencies": {
+    "@circle-fin/adapter-viem-v2": "^1.18.0",
+    "@circle-fin/app-kit": "^1.15.2",
     "puppeteer-core": "^25.10.0"
   }
 }

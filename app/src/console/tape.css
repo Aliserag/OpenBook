@@ -29,13 +29,13 @@
   color: var(--ink);
   border-bottom: 1px dashed var(--rule-strong);
   padding: 7px 14px;
-  font-size: 12px;
+  font-size: 13px;
   gap: 10px;
 }
 
 .console .console__title {
   color: var(--ink);
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.14em;
 }
 
@@ -45,7 +45,7 @@
 }
 
 .console .console__chip {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ink-2);
   background: var(--sheet);
   border: 1px solid var(--rule-strong);
@@ -98,7 +98,7 @@
 /* the echoed command line (on the tape, above its block) */
 .console .console__line {
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 15.5px;
   font-weight: 700;
   color: var(--ink);
   padding: 2px 0 4px;
@@ -111,7 +111,7 @@
 
 .console .console__running {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--muted);
   font-style: italic;
 }
@@ -136,7 +136,7 @@
 .tape__text, .tape__log {
   margin: 0;
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 15px;
   line-height: 1.6;
   color: var(--ink-2);
   white-space: pre-wrap;
@@ -152,16 +152,40 @@
   display: flex;
   gap: 12px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 15px;
   padding: 2px 0;
   border-bottom: 1px dashed var(--rule);
 }
 
 .tape__kvrow:last-of-type { border-bottom: 0; }
 
+/* the money lines (verdict, refund): a size up, and the stamp's own colours */
+.tape__kvrow--verdict {
+  font-size: 17px;
+  padding: 5px 0 6px;
+}
+
+.tape__kvrow--verdict .tape__k { color: var(--ink); }
+.tape__kvrow--ok .tape__v { color: var(--settled); }
+.tape__kvrow--refuse .tape__v { color: var(--stale); }
+.tape__kvrow--refund .tape__v { color: var(--refunded); }
+
+/* the SLA statements: green when the floor was cleared, amber when it was not */
+.tape__kvrow--fresh .tape__v { color: var(--settled); }
+.tape__kvrow--stale .tape__v { color: var(--stale); }
+
+/* the numbers the room is asked to read: age, window */
+.tape__kvrow--proof { font-size: 16px; padding: 3px 0 4px; }
+.tape__kvrow--proof .tape__v { color: var(--ink); }
+
+/* context nobody reads on camera */
+.tape__kvrow--plumbing .tape__v { color: var(--muted); }
+
 .tape__k {
   min-width: 17ch;
   color: var(--muted);
+  /* keys stay a step below the values: the values are what the room reads */
+  font-size: 13.5px;
   text-transform: lowercase;
   letter-spacing: 0.02em;
   flex: 0 0 17ch;
@@ -173,12 +197,12 @@
 }
 
 /* table */
-.tape__tablewrap { max-width: 100%; }
+.tape__tablewrap { max-width: 100%; overflow-x: auto; }
 
 .tape__summary {
   margin-bottom: 6px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 14px;
   color: var(--ink);
   padding-bottom: 5px;
   border-bottom: 1px dashed var(--rule-strong);
@@ -188,7 +212,7 @@
   width: 100%;
   border-collapse: collapse;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -196,7 +220,7 @@
   text-align: left;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--muted);
   border-bottom: 1px solid var(--rule-strong);
   padding: 3px 10px 5px 0;
@@ -224,7 +248,7 @@
 .tape__note {
   margin-top: 6px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.55;
   color: var(--muted);
 }
@@ -259,7 +283,7 @@
 .tape__tx-stamp {
   font-family: var(--display);
   font-weight: 700;
-  font-size: 12px;
+  font-size: 13.5px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   border: 2px solid var(--ink);
@@ -275,7 +299,7 @@
 
 .tape__txlink {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13.5px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -294,7 +318,7 @@
 
 .tape__tx-title {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--ink);
   margin-bottom: 4px;
 }
@@ -347,7 +371,7 @@
   justify-content: space-between;
   gap: 10px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 15px;
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }
@@ -359,7 +383,7 @@
   align-items: center;
   gap: 10px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   padding: 2px 0 5px;
 }
 
@@ -377,7 +401,7 @@
 
 .tape__kind {
   margin-left: auto;
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-2);
@@ -398,7 +422,7 @@
   top: 44px;
   font-family: var(--display);
   font-weight: 700;
-  font-size: 15px;
+  font-size: 20px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
   border: 2px solid currentColor;
@@ -454,7 +478,7 @@
 /* ===== empty tape: suggestions as clickable chips + shortcut hints ====== */
 
 .console .console__empty {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--ink-2);
   font-family: var(--sans);
 }
@@ -493,7 +517,7 @@
 
 .console .console__asks-cap {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13.5px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
@@ -502,7 +526,7 @@
 
 .console .console__ask-chip {
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: 14.5px;
   color: var(--ink-2);
   background: var(--sheet);
   border: 1px solid var(--rule-strong);
@@ -525,7 +549,7 @@
   gap: 8px;
   padding: 2px 14px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--accent);
 }
 
@@ -556,7 +580,7 @@
 /* the input-mode chip (command | ask). No key -> the chip says how to enable. */
 .console .console__mode {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--ink-2);
   background: var(--sheet);
   border: 1px solid var(--rule-strong);
@@ -587,13 +611,13 @@
   align-items: baseline;
   gap: 8px;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 15px;
   color: var(--ink);
 }
 
 .console .console__ask-tag {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13.5px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--accent);
@@ -605,21 +629,21 @@
 .console .console__ask-why {
   margin: 0;
   font-family: var(--sans);
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--ink-2);
 }
 
 .console .console__ask-note {
   margin: 0;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--muted);
 }
 
 .console .console__ask-run {
   align-self: flex-start;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--sheet);
   background: var(--accent);
@@ -637,14 +661,14 @@
 
 .console .console__ask-run-note {
   font-weight: 400;
-  font-size: 12px;
+  font-size: 13.5px;
   opacity: 0.75;
 }
 
 .console .console__ask-cancel {
   align-self: flex-start;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13.5px;
   color: var(--muted);
   background: var(--sheet);
   border: 1px solid var(--rule-strong);
@@ -682,12 +706,12 @@
   padding: 9px 14px;
 }
 
-.console .console__inputrow .console__prompt { font-size: 14px; }
+.console .console__inputrow .console__prompt { font-size: 15px; }
 
 .console .console__input {
   flex: 1;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 16px;
   color: var(--ink);
   background: transparent;
   border: 0;
@@ -756,7 +780,7 @@
   gap: 10px;
   padding: 4px 10px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13.5px;
   cursor: pointer;
 }
 
@@ -856,7 +880,7 @@
 .palette__input {
   flex: 1;
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: 16px;
   color: var(--ink);
   background: transparent;
   border: 0;
@@ -900,7 +924,7 @@
 
 .palette__opt-name {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--ink);
   flex: 0 0 auto;
@@ -927,7 +951,7 @@
 
 .palette__foot {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   padding: 6px 12px;
   border-top: 1px dashed var(--rule);
@@ -986,6 +1010,6 @@
   margin-left: 4px;
   color: var(--muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
 }
 .tape__copy:hover { color: var(--accent); }

@@ -430,13 +430,13 @@ export interface SuggestedAsk {
 }
 
 export const SUGGESTED_ASKS: SuggestedAsk[] = [
-  { label: "Get me the odds for Charlotte 49ers vs Western Carolina, max 10 cents, under 10 seconds old", line: 'buy overtime-sports-odds --match "Charlotte 49ers" --max 0.10 --fresh 10' },
-  { label: "Same odds, but no older than a tenth of a second", line: 'buy overtime-sports-odds --match "Charlotte 49ers" --fresh 0.1' },
+  { label: "What data should I buy?", line: "datasets" },
+  { label: "Get me the odds for the Charlotte 49ers", line: 'buy overtime-sports-odds --match "Charlotte 49ers" --max 0.10 --fresh 10' },
+  { label: "The same odds, but no older than a tenth of a second", line: 'buy overtime-sports-odds --match "Charlotte 49ers" --fresh 0.1' },
   { label: "What's the current USDC lending rate on Aave? Under 10 seconds old", line: 'buy aave-v3-arbitrum-lending --match "USDC" --fresh 10' },
   { label: "What's ETH trading at on Uniswap right now? Under a minute old", line: 'buy uniswap-v3-arbitrum-dex --match "WETH/USDC" --fresh 60' },
   { label: "What sold on OpenSea most recently? Under 5 minutes old", line: "buy opensea-nft-trades --fresh 300" },
   { label: "Which ENS names were just registered? Under 5 minutes old", line: "buy ens-registrations --fresh 300" },
-  { label: "What data can I buy?", line: "datasets" },
   { label: "How much has the protocol earned?", line: "books" },
 ];
 
@@ -465,8 +465,10 @@ function datasetArg(line: string, fallback: string): string {
 }
 
 const EARNED: SuggestedAsk = { label: "What has the protocol earned?", line: "books" };
-const ODDS_FRESH: SuggestedAsk = { label: "Get me the odds for Charlotte 49ers vs Western Carolina, under 10 seconds old", line: `buy ${DEFAULT_DATASET} --match "${DEFAULT_MATCH}" --fresh 10` };
+const ODDS_FRESH: SuggestedAsk = { label: "Get me the odds for the Charlotte 49ers", line: `buy ${DEFAULT_DATASET} --match "${DEFAULT_MATCH}" --fresh 10` };
 const ODDS_TIGHT: SuggestedAsk = { label: "Same odds, but no older than a tenth of a second", line: `buy ${DEFAULT_DATASET} --match "${DEFAULT_MATCH}" --fresh 0.1` };
+/** the second refund beat: a market anyone in the room has heard of, same impossible window */
+const DEX_TIGHT: SuggestedAsk = { label: "Do that to the ETH price on Uniswap — a tenth of a second old", line: 'buy uniswap-v3-arbitrum-dex --match "WETH/USDC" --fresh 0.1' };
 
 /**
  * The next moves, keyed to what just happened, worded the way a person would
@@ -509,6 +511,7 @@ export function suggestionsFor(ctx: SuggestionContext): SuggestedAsk[] {
       return [
         { label: `Replay job ${job.jobId} frame by frame`, line: `replay ${job.jobId}` },
         { label: "Now ask for the same data fresher than any seller can promise", line: `buy ${ds} --fresh 0.1` },
+        DEX_TIGHT,
         EARNED,
         { label: "Show me the settled purchases", line: "jobs --state settled" },
       ];
@@ -516,6 +519,7 @@ export function suggestionsFor(ctx: SuggestionContext): SuggestedAsk[] {
     return [
       { label: `Replay the refund of job ${job.jobId}`, line: `replay ${job.jobId}` },
       { label: "Show me every refund", line: "jobs --state refunded" },
+      DEX_TIGHT,
       EARNED,
       { label: `Buy ${ds} again, allowing 10 seconds`, line: `buy ${ds} --fresh 10` },
     ];
@@ -533,9 +537,10 @@ export function suggestionsFor(ctx: SuggestionContext): SuggestedAsk[] {
   }
   if (line === "datasets" || head === "ens show" || head === "ens can-edit") {
     return [
+      // the marketplace listing answers "what can I buy" · the next move is that purchase
+      ODDS_FRESH,
       { label: "How fresh are the sports odds right now?", line: `quote ${DEFAULT_DATASET}` },
       { label: "Show me the seller's ENS records", line: "ens show" },
-      ODDS_FRESH,
       EARNED,
     ];
   }
@@ -551,6 +556,15 @@ export function suggestionsFor(ctx: SuggestionContext): SuggestedAsk[] {
   }
   if (head === "policy refusals" || head === "policy try-overspend" || head === "sandbox claim") {
     return [{ label: "Show me the treasury's caps and spend", line: "policy show" }, EARNED, ODDS_FRESH];
+  }
+  if (line.startsWith("buy") && job === null) {
+    // a purchase the model proposed but nobody confirmed yet: the relevant move is to run it
+    // (the receipt above carries the Run button; this makes the same move reachable as a chip)
+    return [
+      { label: "Run that purchase — fund, deliver, settle or refund in one receipt", line },
+      { label: "What data should I buy?", line: "datasets" },
+      EARNED,
+    ];
   }
   return SUGGESTED_ASKS;
 }

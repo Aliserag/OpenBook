@@ -1,12 +1,15 @@
 import type { JSX } from "react";
 import { useAccount, useBalance, useConnect, useDisconnect } from "wagmi";
 import { ensureArcChain } from "../arc";
+import { env } from "../env";
 import { truncateHash } from "../format";
 
 export const ARC_FAUCET = "https://faucet.circle.com";
+/** The faucet is testnet-only: on mainnet a low balance is an on-ramp/bridge problem. */
+const IS_MAINNET = env.arcChainId === 5042;
 
 /**
- * Connect a browser wallet on Arc testnet. Once connected, the console's
+ * Connect a browser wallet on the active Arc network. Once connected, the console's
  * act commands buy with this wallet (three signatures: createJob, approve,
  * fund; gas in Arc's native USDC) instead of the deployment's Circle wallet.
  */
@@ -22,7 +25,7 @@ export function WalletButton(): JSX.Element {
         type="button"
         className="wallet"
         disabled={injected === undefined || isPending}
-        title={injected === undefined ? "no browser wallet found" : "connect a browser wallet on Arc testnet"}
+        title={injected === undefined ? "no browser wallet found" : `connect a browser wallet on ${env.arcChainName}`}
         onClick={() => {
           if (injected === undefined) return;
           connect({ connector: injected }, { onSuccess: () => void ensureArcChain().catch(() => undefined) });
@@ -38,7 +41,7 @@ export function WalletButton(): JSX.Element {
     <span className="wallet wallet--on" title={address}>
       <span className="wallet__addr">{truncateHash(address)}</span>
       <span className="wallet__bal">{usdc === null ? "…" : `${usdc.toFixed(2)} USDC`}</span>
-      {low && (
+      {low && !IS_MAINNET && (
         <a className="wallet__faucet" href={ARC_FAUCET} target="_blank" rel="noreferrer">
           get testnet USDC
         </a>
