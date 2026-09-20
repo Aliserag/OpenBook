@@ -80,6 +80,24 @@ stale run → refund) with the real USDC movement linked from `SUBMISSION.md`. T
 onchain receipts are the proof — every settlement and refund already carries a job id
 and a tx hash on the explorer.
 
+## Arc's own mainnet contracts (verified on chain, 2026-09-18)
+
+Read from the docs' mainnet tab **and** confirmed with `cast code` against
+`https://rpc.mainnet.arc.io` — the byte count is the runtime code size, so a zero would mean the
+address is not actually deployed on this chain:
+
+| contract | address | CCTP domain | runtime |
+| --- | --- | --- | --- |
+| USDC (ERC-20 view of the native balance, 6 decimals) | `0x3600000000000000000000000000000000000000` | — | 1798 B |
+| TokenMessengerV2 | `0x28b5a0e9C621a5BadaA536219b3a228C8168cf5d` | 26 | 2175 B |
+| MessageTransmitterV2 | `0x81D40F21F12A8F0E3252Bccb954D722d4c464B64` | 26 | 2175 B |
+| TokenMinterV2 | `0xfd78EE919681417d192449715b2594ab58f5D002` | 26 | 9295 B |
+| MessageV2 | `0xec546b6B005471ECf012e5aF77FBeC07e0FD8f78` | 26 | 281 B |
+
+`scripts/bridge-eth-to-arc.mjs` deliberately hard-codes none of these: Circle's App Kit resolves
+them from the chain names (`"Ethereum"` → `"Arc"`), and the script checks both names against the
+SDK's own `getSupportedChains()` before it spends anything.
+
 ## Deployed (2026-09-18)
 
 Four contracts, real USDC, two live jobs — every address, tx hash and balance delta:
