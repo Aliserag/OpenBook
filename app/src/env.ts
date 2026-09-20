@@ -19,6 +19,12 @@ export const env = {
   arcChainId: Number(import.meta.env.VITE_ARC_CHAIN_ID ?? "5042002"),
   arcChainName: (import.meta.env.VITE_ARC_CHAIN_NAME as string | undefined) ?? "Arc Testnet",
   arcExplorer: (import.meta.env.VITE_ARC_EXPLORER as string | undefined) ?? "https://testnet.arcscan.app",
+  /**
+   * The Arc-mainnet deployment of this same repo (chain 5042: escrow + SLA hook + policy
+   * wallet, proven with real USDC — docs/mainnet-evidence.md). Shown as a footer link on
+   * testnet builds only; the mainnet build is that deployment.
+   */
+  mainnetAppUrl: (import.meta.env.VITE_MAINNET_APP_URL as string | undefined) ?? "https://openbook-mainnet.vercel.app",
   /** USDC ERC-20 on the active chain — override for mainnet. */
   usdcAddress: (import.meta.env.VITE_USDC_ADDRESS as string | undefined) ?? undefined,
   /** The Graph Studio key: gates the delivery query (the open-book P&L endpoint is public) */
